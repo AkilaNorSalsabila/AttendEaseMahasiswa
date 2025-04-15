@@ -1,0 +1,1472 @@
+from flask import Flask, render_template, request, redirect, jsonify, session
+import os
+import cv2
+import numpy as np
+import base64
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash, check_password_hash
+import tensorflow as tf
+from werkzeug.security import generate_password_hash
+import json 
+from flask import Response
+from firebase_admin import credentials, initialize_app, db, storage
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, classification_report
+import seaborn as sns
+
+
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Ganti dengan secret key yang aman
+app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
+
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+dataset_path = 'DataSet'
+
+
+
+# Inisialisasi Firebase
+cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+initialize_app(cred, {
+    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+})
+bucket = storage.bucket('facerecognition-c8264.appspot.com')
+
+# Load model hasil fine-tuning
+model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
+
+# Load label dari file JSON
+with open('label_map.json', 'r') as f:
+    labels = json.load(f)
+
+# Path dataset
+dataset_path = 'DataSet'
+
+test_dataset_path = "DataTest"
+
+faceDeteksi = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
+# Fungsi untuk mengunggah dataset manual ke Firebase
+# Fungsi untuk mencatat metadata ke Firebase
+# Fungsi untuk mencatat metadata ke Firebase, termasuk jumlah gambar
+
+
+# Halaman Utama (Opsi Login)
+@app.route('/')
+def home():
+    return render_template('home.html')  
+
+# Login Admin
+@app.route('/login_admin', methods=['GET', 'POST'])
+def login_admin():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        # Cek login di Firebase
+        ref = db.reference('akun')
+        accounts = ref.get()
+
+        for user in accounts.values():
+            if user['username'] == username and check_password_hash(user['password'], password):
+                session['user'] = username
+                return redirect('/dashboard')
+
+        return render_template('login_admin.html', message="Username atau Password salah!")
+
+    return render_template('login_admin.html')
+
+# Login Mahasiswa
+@app.route('/login_mahasiswa', methods=['GET', 'POST'])
+def login_mahasiswa():
+    if request.method == 'POST':
+        nim = request.form['nim']
+        students_ref = db.reference('students')
+        students_data = students_ref.get()
+        for student_id, student_info in students_data.items():
+            if student_info['nim'] == nim:
+                session['mahasiswa'] = {
+                    'id': student_info.get('id', ''),
+                    'name': student_info.get('name', ''),
+                    'nim': student_info.get('nim', ''),
+                    'mata_kuliah': student_info.get('mata_kuliah', []),
+                    'golongan': student_info.get('golongan', '')
+                }
+                return redirect('/mahasiswa_dashboard')
+
+        return render_template('login_mahasiswa.html', message="NIM tidak ditemukan atau tidak terdaftar!")
+
+    return render_template('login_mahasiswa.html')
+
+@app.route('/mahasiswa_dashboard')
+def mahasiswa_dashboard():
+    if 'mahasiswa' not in session:
+        return redirect('/login_mahasiswa')
+    
+    mahasiswa = session['mahasiswa']
+    return render_template('mahasiswa_dashboard.html', mahasiswa=mahasiswa)
+
+#Register Admin
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        # Validasi input
+        if not username or not password:
+            return render_template('register.html', message="Username dan Password harus diisi!")
+
+        # Hash password sebelum menyimpannya
+        hashed_password = generate_password_hash(password)
+
+        try:
+            # Simpan ke Firebase
+            ref = db.reference('akun')
+            ref.push({
+                'username': username,
+                'password': hashed_password
+            })
+            return redirect('/login_admin')
+        except Exception as e:
+            return render_template('register.html', message=f"Terjadi kesalahan: {str(e)}")
+
+    return render_template('register.html')
+
+# Halaman Dashboard Admin
+@app.route('/dashboard')
+def dashboard():
+    if 'user' not in session:
+        return redirect('/')
+    return render_template('dashboard.html')
+
+import time
+
+
+def gen(user_id, mata_kuliah, minggu_ke, nim):
+    golongan = "A"  # Golongan bisa disesuaikan sesuai kebutuhan
+    jadwal_ref = db.reference(f'jadwal_mata_kuliah/{golongan}/{mata_kuliah}')
+    jadwal_data = jadwal_ref.get()
+    nama_mata_kuliah = jadwal_data.get('name', 'Unknown')
+    kode_mata_kuliah_asli = jadwal_data.get('kode_mk', mata_kuliah)
+
+    # Inisialisasi kamera
+    camera = cv2.VideoCapture(0)
+    if not camera.isOpened():
+        print("[ERROR] Kamera tidak dapat dibuka. Pastikan kamera tersedia.")
+        return
+
+    attendance_logged = False
+    detected_name = "Unknown"
+    capture_dir = "captures"
+    os.makedirs(capture_dir, exist_ok=True)
+
+    try:
+        while True:
+            # Jika absensi sudah dicatat, hentikan generator
+            if attendance_logged:
+                print("[DEBUG] Absensi sudah dicatat. Menghentikan generator.")
+                break
+
+            success, frame = camera.read()
+            if not success:
+                print("[ERROR] Tidak dapat membaca frame dari kamera.")
+                break
+
+            # Konversi ke grayscale untuk deteksi wajah
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+            for (x, y, w, h) in faces:
+                # Preprocess wajah untuk input model
+                face_img = frame[y:y + h, x:x + w]
+                face_img = cv2.resize(face_img, (224, 224))
+                face_img = np.expand_dims(face_img, axis=0) / 255.0
+
+                # Prediksi menggunakan model CNN
+                prediction = model.predict(face_img)
+                confidence = float(np.max(prediction[0]))
+                detected_id = str(np.argmax(prediction[0]) + 1)
+                detected_name = labels.get(detected_id, "Unknown")
+
+                print(f"[DEBUG] Deteksi wajah: ID={detected_id}, Confidence={confidence:.2f}, Nama={detected_name}")
+
+                # Validasi NIM
+                detected_nim = detected_name.split("-")[1] if "-" in detected_name else None
+                expected_nim = user_id.split("-")[1] if "-" in user_id else None
+
+                print(f"[DEBUG] Detected NIM: {detected_nim}, Expected NIM: {expected_nim}")
+
+                # Tambahkan kotak di sekitar wajah dan teks
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.putText(
+                    frame,
+                    f"{detected_name} ({confidence * 100:.2f}%)",
+                    (x, y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 255, 0),
+                    2,
+                )
+
+                # Cek apakah absensi dapat dicatat
+                if confidence >= 0.75 and detected_nim == expected_nim and not attendance_logged:
+                    try:
+                        # Simpan absensi ke Firebase
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        image_path = f"attendance_{user_id}_{timestamp.replace(':', '-')}.jpg"
+                        local_filepath = os.path.join(capture_dir, image_path)
+                        cv2.imwrite(local_filepath, frame)
+
+                        # Unggah ke Firebase Storage
+                        blob = bucket.blob(f'attendance_images/{image_path}')
+                        blob.upload_from_filename(local_filepath)
+                        blob.make_public()
+                        image_url = blob.public_url
+
+                        # Simpan data absensi ke Realtime Database
+                        attendance_ref = db.reference(f"attendance/{mata_kuliah}/{minggu_ke}/{user_id}")
+                        attendance_data = {
+                            "nim": nim,
+                            "name": detected_name,
+                            "kode_mata_kuliah": mata_kuliah,
+                            "nama_mata_kuliah": nama_mata_kuliah,
+                            "minggu_ke": minggu_ke,
+                            "status": "Hadir",
+                            "timestamp": timestamp,
+                            "image_url": image_url,
+                            "golongan": golongan
+                        }
+                        attendance_ref.push(attendance_data)
+                        print(f"[SUCCESS] Data absensi berhasil disimpan: {attendance_data}")
+
+                        attendance_logged = True
+                        break
+                    except Exception as e:
+                        print(f"[ERROR] Terjadi kesalahan saat mencatat absensi: {e}")
+
+            # Streaming frame ke frontend
+            _, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+    except Exception as e:
+        print(f"[ERROR] Terjadi kesalahan pada fungsi gen: {e}")
+    finally:
+        # Pastikan kamera ditutup dan window dihentikan
+        camera.release()
+        cv2.destroyAllWindows()
+        print("[INFO] Kamera ditutup dan jendela video dihentikan.")
+
+
+@app.route('/video_feed/<user_id>/<mata_kuliah>/<minggu_ke>/<nim>')
+def video_feed(user_id, mata_kuliah, minggu_ke, nim):
+    print(f"[DEBUG] Video feed accessed for user_id={user_id}, mata_kuliah={mata_kuliah}, minggu_ke={minggu_ke}, nim={nim}")
+    return Response(
+        gen(user_id, mata_kuliah, minggu_ke, nim),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+
+
+
+
+# Memanmbahkan Dataset
+@app.route('/dataset', methods=['GET', 'POST'])
+def dataset():
+    """
+    Route untuk menambahkan dataset mahasiswa.
+    """
+    if request.method == 'GET':
+        mahasiswa = {
+            'nama': 'John Doe',
+            'nim': '321',
+            'golongan': 'A',
+            'semester': 1,  # Default Semester
+            'tahun_ajaran': '2024/2025'  # Default Tahun Ajaran
+        }
+        return render_template('dataset.html', mahasiswa=mahasiswa)
+
+    elif request.method == 'POST':
+        try:
+            # Ambil data dari form
+            name = request.form.get('name')  # Nama mahasiswa
+            nim = request.form.get('nim')  # NIM mahasiswa
+            golongan = request.form.get('golongan')  # Golongan kelas
+            semester = request.form.get('semester')  # Semester
+            tahun_ajaran = request.form.get('tahun_ajaran') 
+
+            # Validasi NIM (harus berupa angka/huruf)
+            if not nim or not nim.isalnum():
+                return jsonify({'status': 'error', 'message': 'NIM harus berupa huruf atau angka tanpa karakter khusus!'}), 400
+
+            # Buat student_id dengan format "ID-{nim}"
+            student_id = f'ID-{nim}'
+
+            # Validasi input
+            if not all([name, nim, golongan]):
+                return jsonify({'status': 'error', 'message': 'Nama, NIM, dan Golongan harus diisi!'}), 400
+
+            # Buat folder penyimpanan dengan format "<ID>-<Nama>"
+            folder_name = f"{student_id}-{name.replace(' ', '_')}"  # Replace spasi dengan underscore
+            folder_path = os.path.join(dataset_path, folder_name)
+            os.makedirs(folder_path, exist_ok=True)
+
+            # Ambil file gambar dari request
+            images = [request.form.get(key) for key in request.form if key.startswith('image_')]
+            if not images:
+                return jsonify({'status': 'error', 'message': 'Tidak ada gambar yang diterima!'}), 400
+
+            def process_and_crop_faces(image, file_name_prefix, save_folder, user_id, user_name, start_count=0, padding=0.2):
+                """
+                Fungsi untuk memproses dan memotong wajah dari gambar, lalu mengubah ukurannya menjadi 224x224.
+                """
+                # Konversi gambar ke YUV dan histogram equalization
+                img_yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+                img_yuv[:, :, 0] = cv2.equalizeHist(img_yuv[:, :, 0])
+                image = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2BGR)
+
+                # Terapkan median filter untuk mengurangi noise
+                image = cv2.medianBlur(image, 5)
+
+                # Deteksi wajah
+                faces = face_cascade.detectMultiScale(
+                    image, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30)
+                )
+                count = start_count
+
+                for (x, y, w, h) in faces:
+                    # Tambahkan padding
+                    x_pad = int(padding * w)
+                    y_pad = int(padding * h)
+                    x_start = max(0, x - x_pad)
+                    y_start = max(0, y - y_pad)
+                    x_end = min(image.shape[1], x + w + x_pad)
+                    y_end = min(image.shape[0], y + h + y_pad)
+
+                    # Crop wajah
+                    cropped_face = image[y_start:y_end, x_start:x_end]
+
+                    # Resize wajah ke ukuran 224x224
+                    resized_face = cv2.resize(cropped_face, (224, 224), interpolation=cv2.INTER_AREA)
+
+                    # Simpan secara lokal
+                    file_name = f"{file_name_prefix}.{count}.jpg"
+                    local_path = os.path.join(save_folder, file_name)
+                    cv2.imwrite(local_path, resized_face)
+
+                    # Upload ke Firebase Storage
+                    blob = bucket.blob(f'images/{user_id}_{user_name}/{file_name}')
+                    blob.upload_from_filename(local_path)
+                    blob.make_public()  # URL publik
+                    image_url = blob.public_url
+
+                    count += 1
+
+                return count
+
+            # Proses setiap gambar yang diterima
+            total_faces_saved = 0
+            for idx, image_data in enumerate(images):
+                try:
+                    # Decode gambar dari base64
+                    image_data = image_data.split(",")[1]  # Hapus prefix
+                    img_array = np.frombuffer(base64.b64decode(image_data), np.uint8)
+                    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+                    if img is None:
+                        return jsonify({'status': 'error', 'message': f'Gambar ke-{idx + 1} tidak valid!'}), 400
+
+                    # Proses wajah dan simpan ke folder
+                    total_faces_saved = process_and_crop_faces(
+                        image=img,
+                        file_name_prefix=student_id,
+                        save_folder=folder_path,
+                        user_id=student_id,
+                        user_name=name,
+                        start_count=total_faces_saved
+                    )
+                except Exception as e:
+                    print(f"Kesalahan pada gambar ke-{idx + 1}: {str(e)}")
+
+            if total_faces_saved == 0:
+                return jsonify({'status': 'error', 'message': 'Tidak ada wajah yang berhasil disimpan!'}), 400
+
+            # Simpan data mahasiswa ke Firebase
+            # Simpan data mahasiswa ke Firebase, termasuk jumlah gambar
+            student_ref = db.reference(f'students/{student_id}')
+            images_count = len([f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+            print(f"[DEBUG] Jumlah gambar yang disimpan: {images_count}")
+
+            student_ref.set({
+                'id': student_id,      # ID dengan format "ID-{nim}"
+                'name': name,          # Nama mahasiswa
+                'nim': nim,            # NIM hanya angka/huruf
+                'golongan': golongan,  # Golongan kelas
+                'semester': int(semester),
+                'tahun_ajaran': tahun_ajaran,
+                'images_count': images_count,
+                'timestamp': datetime.now().isoformat()
+                })
+            print(f"[DEBUG] Metadata mahasiswa diperbarui di Firebase: {student_id}")
+            return jsonify({
+                'status': 'success',
+                'message': f'Dataset berhasil disimpan. Total wajah yang disimpan: {total_faces_saved}',
+                'student_id': student_id
+            })
+
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': f'Terjadi kesalahan: {str(e)}'}), 500
+
+# Fungsi untuk mengunggah file dan mencatat metadata
+def upload_dataset_to_firebase():
+    try:
+        # Firebase references
+        bucket = storage.bucket()
+        students_ref = db.reference('students')
+
+        print(f"Memproses folder dataset: {dataset_path}")
+
+        for student_folder in os.listdir(dataset_path):
+            folder_path = os.path.join(dataset_path, student_folder)
+
+            # Abaikan jika bukan folder
+            if not os.path.isdir(folder_path):
+                continue
+
+            print(f"Memproses folder: {student_folder}")
+
+            # Ekstrak NIM dari folder
+            if "ID-" in student_folder:
+                nim = student_folder.split("ID-")[1]
+            else:
+                print(f"Folder {student_folder} tidak memiliki format 'ID-{NIM}'. Abaikan.")
+                continue
+
+            # Hitung jumlah file gambar
+            image_files = [f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            images_count = len(image_files)
+
+            # Unggah setiap file gambar ke Firebase Storage
+            for image_file in image_files:
+                local_file_path = os.path.join(folder_path, image_file)
+                cloud_file_path = f"datasets/{student_folder}/{image_file}"
+
+                # Upload file ke Firebase Storage
+                blob = bucket.blob(cloud_file_path)
+                blob.upload_from_filename(local_file_path)
+                blob.make_public()  # Buat file bisa diakses publik
+                print(f"File diunggah: {local_file_path} -> {cloud_file_path}")
+
+            # Simpan metadata ke Realtime Database
+            metadata = {
+                'id': student_folder,
+                'nim': nim,
+                'name': student_folder.split('', 1)[1] if '' in student_folder else "Unknown",
+                'golongan': "A",
+                'semester': int(semester),
+                'tahun_ajaran': tahun_ajaran,
+                'images_count': images_count,
+                'timestamp': datetime.now().isoformat()
+            }
+            students_ref.child(student_folder).set(metadata)
+
+            print(f"Metadata untuk {student_folder} berhasil disimpan: {metadata}")
+
+    except Exception as e:
+        print(f"Terjadi kesalahan: {e}")
+
+# Jalankan fungsi
+upload_dataset_to_firebase()
+
+
+import re
+
+
+@app.route('/attendance', methods=['GET', 'POST'])
+def admin_attendance():
+    """
+    Admin melihat laporan absensi berdasarkan golongan dan mata kuliah.
+    """
+    if 'user' not in session:
+        return redirect('/login_admin')
+
+    golongan = None
+    mata_kuliah = None
+    attendance_list = []
+
+    # Ambil data jadwal terlebih dahulu
+    jadwal_ref = db.reference('jadwal_mata_kuliah')
+    jadwal_data = jadwal_ref.get() or {}
+
+    # Pastikan jadwal_data terisi, jika kosong atau None, tangani dengan cara yang sesuai
+    if not jadwal_data:
+        jadwal_data = {}
+
+    # Jika form disubmit, ambil golongan dan mata kuliah dari form
+    if request.method == 'POST':
+        golongan = request.form.get('golongan')
+        mata_kuliah = request.form.get('mata_kuliah')
+
+        print(f"Golongan yang dipilih: {golongan}")  # Debugging output golongan
+        print(f"Mata Kuliah yang dipilih: {mata_kuliah}")  # Debugging output mata kuliah
+
+        # Ambil data dari Firebase berdasarkan golongan dan mata kuliah
+        attendance_ref = db.reference('attendance')
+        attendance_data = attendance_ref.get() or {}
+
+        # Ambil data jadwal untuk golongan dan mata kuliah yang dipilih
+        golongan_mahasiswa = jadwal_data.get(golongan, {}).get(mata_kuliah, [])
+
+        # Ambil data mahasiswa dari koleksi students
+        students_ref = db.reference('students')
+        students_data = students_ref.get() or {}
+
+        # Pastikan students_data adalah dictionary, bukan string
+        if isinstance(students_data, str):
+            students_data = {}
+
+        # Ambil daftar mahasiswa berdasarkan golongan yang dipilih
+        golongan_students = [student for student in students_data.values() if student['golongan'] == golongan]
+
+        # Proses data absensi sesuai golongan dan mata kuliah yang dipilih
+        for mata_kuliah_db, minggu_data in attendance_data.items():
+            if mata_kuliah_db != mata_kuliah:
+                continue
+            for minggu_ke, student_data in minggu_data.items():
+                for student_id, records in student_data.items():
+                    for record_id, detail in records.items():
+                        if isinstance(detail, dict) and detail.get("golongan") == golongan:
+                            full_name = detail.get("name", "Tidak Ada")
+                            name_only = full_name.split('-')[-1].strip() if full_name else "Tidak Ada"
+                            
+                            # Gunakan regex untuk memastikan minggu_ke hanya berisi angka
+                            minggu_number = re.sub(r'\D', '', minggu_ke)  # Hapus semua karakter non-digit
+
+                            # Tambahkan data absensi mahasiswa yang hadir
+                            attendance_list.append({
+                                "kode_mata_kuliah": detail.get("kode_mata_kuliah", "Tidak Ada"),
+                                "nama_mata_kuliah": detail.get("nama_mata_kuliah", "Tidak Ada"),
+                                "minggu_ke": int(minggu_number),  # Menggunakan minggu_ke sebagai integer
+                                "nim": detail.get("nim", "Tidak Ada"),
+                                "nama": name_only,
+                                "status": detail.get("status", "Hadir"),
+                                "timestamp": detail.get("timestamp", "Tidak Ada"),
+                                "image_url": detail.get("image_url", None)
+                            })
+
+        # Menambahkan mahasiswa yang tidak hadir berdasarkan golongan
+        for mahasiswa in golongan_students:
+            found = False
+            for attendance in attendance_list:
+                if attendance['nim'] == mahasiswa['nim']:  # Cek berdasarkan NIM
+                    found = True
+                    break
+
+            # Jika mahasiswa tidak ada dalam data absensi, tambahkan sebagai tidak hadir
+            if not found:
+                # Tentukan minggu yang sesuai, gunakan minggu yang ada di data absensi
+                for mata_kuliah_db, minggu_data in attendance_data.items():
+                    if mata_kuliah_db == mata_kuliah:
+                        for minggu_ke, student_data in minggu_data.items():
+                            # Gunakan minggu_ke dari data yang ada
+                            minggu_number = re.sub(r'\D', '', minggu_ke)  # Hapus semua karakter non-digit
+
+                            attendance_list.append({
+                                "kode_mata_kuliah": mata_kuliah,
+                                "nama_mata_kuliah": mata_kuliah,
+                                "minggu_ke": int(minggu_number),  # Gunakan minggu_ke sebagai integer
+                                "nim": mahasiswa['nim'],
+                                "nama": mahasiswa['name'],
+                                "status": "Tidak Hadir",
+                                "timestamp": "Tidak Ada",
+                                "image_url": None
+                            })
+
+        # Urutkan data berdasarkan minggu_ke dan nama mahasiswa
+        attendance_list = sorted(attendance_list, key=lambda x: (x['minggu_ke'], x['nama']))
+
+    # Ambil daftar golongan dari jadwal_data setelah memastikan data ada
+    golongan_list = list(jadwal_data.keys())  # Ambil daftar golongan (A, B, C)
+
+    # Ambil mata kuliah berdasarkan golongan yang dipilih
+    mata_kuliah_list = []
+    if golongan:
+        mata_kuliah_list = list(jadwal_data.get(golongan, {}).keys())
+
+    return render_template('attendance.html', 
+                           attendance_list=attendance_list,
+                           golongan_list=golongan_list,
+                           mata_kuliah_list=mata_kuliah_list,
+                           golongan=golongan, mata_kuliah=mata_kuliah)
+
+
+@app.route('/update_attendance', methods=['POST'])
+def update_attendance():
+    """
+    Admin memperbarui status absensi mahasiswa.
+    """
+    if 'user' not in session:
+        return redirect('/login_admin')
+
+    # Pastikan data yang diterima adalah JSON
+    data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Invalid JSON data'}), 400
+    
+    # Debugging data yang diterima
+    print(f"Data yang diterima: {data}")
+
+    nim = data.get('nim')
+    minggu_ke = data.get('minggu_ke')
+    status = data.get('status')
+
+    # Pastikan semua data yang diperlukan ada
+    if not nim or not minggu_ke or not status:
+        return jsonify({'status': 'error', 'message': 'NIM, Minggu Ke, dan Status harus ada.'}), 400
+
+    # Update status absensi di Firebase
+    attendance_ref = db.reference('attendance')
+    attendance_data = attendance_ref.get()
+
+    # Pastikan data absensi ada
+    if not attendance_data:
+        return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan.'}), 404
+
+    # Cari entri yang sesuai dan update status
+    for mata_kuliah, minggu_data in attendance_data.items():
+        for minggu, student_data in minggu_data.items():
+            for student_id, records in student_data.items():
+                if student_id == nim:  # Cari berdasarkan NIM
+                    for record_id, record_detail in records.items():
+                        if minggu == minggu_ke:  # Cari berdasarkan minggu
+                            record_detail['status'] = status  # Update status
+                            # Simpan perubahan ke Firebase
+                            attendance_ref.child(mata_kuliah).child(minggu).child(student_id).child(record_id).update(record_detail)
+                            return jsonify({'status': 'success', 'message': 'Absensi berhasil diperbarui.'})
+
+    return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan untuk NIM dan minggu yang diberikan.'}), 404
+
+
+@app.route('/students/edit/<student_id>', methods=['POST'])
+def edit_student(student_id):
+    """
+    Endpoint untuk mengedit data mahasiswa berdasarkan student_id.
+    """
+    try:
+        data = request.json  # Data dikirim dalam format JSON dari frontend
+        student_ref = db.reference(f'students/{student_id}')
+        
+        # Perbarui data mahasiswa di Firebase
+        updated_data = {
+            'semester': data.get('semester', ''),
+            'golongan': data.get('golongan', '')
+        }
+        student_ref.update(updated_data)
+
+        return jsonify({'status': 'success', 'message': f'Data mahasiswa dengan ID {student_id} berhasil diperbarui.'})
+    except Exception as e:
+        print(f"Error saat memperbarui data mahasiswa: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/students/delete/<student_id>', methods=['DELETE'])
+def delete_student(student_id):
+    """
+    Endpoint untuk menghapus data mahasiswa berdasarkan student_id.
+    """
+    try:
+        student_ref = db.reference(f'students/{student_id}')
+        
+        # Hapus data mahasiswa dari Firebase
+        student_ref.delete()
+
+        return jsonify({'status': 'success', 'message': f'Data mahasiswa dengan ID {student_id} berhasil dihapus.'})
+    except Exception as e:
+        print(f"Error saat menghapus data mahasiswa: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# Route untuk mengambil data mahasiswa
+@app.route('/students', methods=['GET'])
+def get_students():
+    try:
+        students_ref = db.reference('students')
+        students_data = students_ref.get()
+
+        students = []
+        if students_data:
+            for student_id, student_info in students_data.items():
+                folder_path = os.path.join(dataset_path, student_id)
+                if os.path.exists(folder_path):
+                    images_count = len([f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+                    
+                    # Update Firebase jika data tidak ada
+                    if 'images_count' not in student_info or student_info['images_count'] == 0:
+                        student_ref = db.reference(f'students/{student_id}')
+                        student_ref.update({'images_count': images_count})
+                
+                # Tambahkan data ke response
+                students.append({
+                    'id': student_id,
+                    'name': student_info.get('name', 'Unknown'),
+                    'nim': student_info.get('nim', 'Unknown'),
+                    'golongan': student_info.get('golongan', 'Unknown'),
+                    'semester': student_info.get('semester', ''),
+                    'images_count': student_info.get('images_count', 0),
+                    'edit_url': f'/students/edit/{student_id}',  # URL untuk edit
+                    'delete_url': f'/students/delete/{student_id}'  # URL untuk hapus
+                })
+
+        return jsonify({'status': 'success', 'data': students})
+    except Exception as e:
+        print(f"Error saat mengambil data mahasiswa dari Firebase: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+
+    
+@app.route('/admin/jadwal_mata_kuliah/delete/<golongan>/<jadwal_id>', methods=['POST'])
+def delete_jadwal(golongan, jadwal_id):
+    """
+    Route untuk menghapus jadwal mata kuliah berdasarkan golongan dan ID jadwal.
+    """
+    if 'user' not in session:
+        return redirect('/')
+
+    try:
+        # Hapus jadwal dari Firebase berdasarkan ID
+        jadwal_ref = db.reference(f'jadwal_mata_kuliah/{golongan}/{jadwal_id}')
+        jadwal_ref.delete()
+        print(f"[INFO] Jadwal {jadwal_id} berhasil dihapus dari golongan {golongan}")
+    except Exception as e:
+        print(f"[ERROR] Gagal menghapus jadwal {jadwal_id} dari golongan {golongan}: {e}")
+
+    return redirect('/admin/jadwal_mata_kuliah')
+
+
+@app.route('/admin/edit_jadwal', methods=['POST'])
+def edit_jadwal():
+    """
+    Route untuk mengedit jadwal mata kuliah.
+    """
+    if 'user' not in session:
+        return redirect('/')
+
+    try:
+        # Ambil data dari form
+        golongan_lama = request.form.get('golongan_lama')
+        mata_kuliah_id = request.form.get('mata_kuliah_id')  # ID jadwal lama
+        golongan_baru = request.form.get('golongan')  # Golongan baru
+        kode_mk = request.form.get('kode_mk')  # Kode MK baru
+        jumlah_pertemuan = int(request.form.get('jumlah_pertemuan', 0))  # Jumlah pertemuan baru
+        mata_kuliah_baru = request.form.get('mata_kuliah')  # Nama mata kuliah baru
+        start_time = request.form.get('start_time')  # Jam mulai baru
+        end_time = request.form.get('end_time')  # Jam selesai baru
+
+        # Validasi input
+        if not all([golongan_lama, mata_kuliah_id, golongan_baru, kode_mk, jumlah_pertemuan, mata_kuliah_baru, start_time, end_time]):
+            return redirect('/admin/jadwal_mata_kuliah?error=Semua field harus diisi!')
+
+        # Referensi jadwal lama
+        jadwal_ref_lama = db.reference(f'jadwal_mata_kuliah/{golongan_lama}/{mata_kuliah_id}')
+        jadwal_data = jadwal_ref_lama.get()
+
+        if jadwal_data:
+            # Jika golongan berubah, pindahkan data ke golongan baru
+            if golongan_lama != golongan_baru:
+                jadwal_ref_lama.delete()  # Hapus data lama
+                jadwal_ref_baru = db.reference(f'jadwal_mata_kuliah/{golongan_baru}/{mata_kuliah_id}')
+                jadwal_ref_baru.set({
+                    'kode_mk': kode_mk,
+                    'name': mata_kuliah_baru,
+                    'jumlah_pertemuan': jumlah_pertemuan,
+                    'start_time': start_time,
+                    'end_time': end_time
+                })
+            else:
+                # Update data di lokasi yang sama
+                jadwal_ref_lama.update({
+                    'kode_mk': kode_mk,
+                    'name': mata_kuliah_baru,
+                    'jumlah_pertemuan': jumlah_pertemuan,
+                    'start_time': start_time,
+                    'end_time': end_time
+                })
+            message = "Jadwal berhasil diperbarui!"
+        else:
+            message = "Data jadwal lama tidak ditemukan."
+    except Exception as e:
+        message = f"Terjadi kesalahan saat memperbarui jadwal: {str(e)}"
+        print(f"[ERROR] {message}")
+
+    return redirect(f'/admin/jadwal_mata_kuliah?message={message}')
+
+
+# Admin Melihat Jadwal Mata Kuliah
+@app.route('/admin/jadwal_mata_kuliah', methods=['GET', 'POST'])
+def admin_jadwal_mata_kuliah():
+    """
+    Route untuk melihat dan mengelola jadwal mata kuliah.
+    """
+    if 'user' not in session:
+        return redirect('/')
+
+    jadwal_ref = db.reference('jadwal_mata_kuliah')
+    students_ref = db.reference('students')
+
+    edit_data = None
+    message = None
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'add':
+            # Tambah jadwal baru
+            golongan = request.form.get('golongan')
+            kode_mk = request.form.get('kode_mk')
+            jumlah_pertemuan = int(request.form.get('jumlah_pertemuan', 0))
+            mata_kuliah = request.form.get('mata_kuliah')
+            start_time = request.form.get('start_time')
+            end_time = request.form.get('end_time')
+
+            if not all([golongan, kode_mk, jumlah_pertemuan, mata_kuliah, start_time, end_time]) or jumlah_pertemuan <= 0:
+                message = "Semua field harus diisi dengan benar!"
+            else:
+                try:
+                    # Tambahkan data ke Firebase dengan kode_mk sebagai ID
+                    jadwal_ref.child(golongan).child(kode_mk).set({
+                        'kode_mk': kode_mk,  # ID mata kuliah
+                        'name': mata_kuliah,
+                        'jumlah_pertemuan': jumlah_pertemuan,
+                        'start_time': start_time,
+                        'end_time': end_time
+                    })
+                    new_jadwal_id = jadwal_ref.key
+                    print(f"Jadwal Baru Ditambahkan dengan ID: {new_jadwal_id}")
+                    message = "Jadwal berhasil ditambahkan!"
+                except Exception as e:
+                    message = f"Terjadi kesalahan saat menambahkan jadwal: {e}"
+
+        elif action == 'prepare_edit':
+            # Siapkan data untuk diedit
+            edit_golongan = request.form.get('edit_golongan')
+            edit_id = request.form.get('edit_id')
+
+            if not edit_golongan or not edit_id:
+                message = "Data untuk edit tidak lengkap!"
+            else:
+                try:
+                    # Ambil data jadwal berdasarkan golongan dan ID
+                    jadwal_edit_ref = jadwal_ref.child(edit_golongan).child(edit_id)
+                    jadwal_edit = jadwal_edit_ref.get()
+                    if jadwal_edit:
+                        edit_data = {
+                            'golongan': edit_golongan,
+                            'id': edit_id,
+                            'kode_mk': jadwal_edit.get('kode_mk', ''),
+                            'name': jadwal_edit.get('name', ''),  # Nama mata kuliah
+                            'jumlah_pertemuan': jadwal_edit.get('jumlah_pertemuan', 0),
+                            'start_time': jadwal_edit.get('start_time', ''),
+                            'end_time': jadwal_edit.get('end_time', '')
+                        }
+                    else:
+                        message = "Jadwal yang akan diedit tidak ditemukan!"
+                except Exception as e:
+                    message = f"Terjadi kesalahan saat menyiapkan data edit: {e}"
+
+        elif action == 'update':
+            # Update jadwal yang ada
+            edit_golongan = request.form.get('edit_golongan')
+            edit_id = request.form.get('edit_id')
+            kode_mk = request.form.get('kode_mk')
+            jumlah_pertemuan = int(request.form.get('jumlah_pertemuan', 0))
+            mata_kuliah = request.form.get('mata_kuliah')
+            start_time = request.form.get('start_time')
+            end_time = request.form.get('end_time')
+
+            if not all([edit_golongan, edit_id, kode_mk, mata_kuliah, start_time, end_time]) or jumlah_pertemuan <= 0:
+                message = "Semua field harus diisi untuk menyimpan perubahan!"
+            else:
+                try:
+                    jadwal_ref.child(edit_golongan).child(edit_id).update({
+                    'kode_mk': kode_mk,
+                    'name': mata_kuliah,
+                    'jumlah_pertemuan': jumlah_pertemuan,
+                    'start_time': start_time,
+                    'end_time': end_time
+})
+                    message = "Jadwal berhasil diperbarui!"
+                except Exception as e:
+                    message = f"Terjadi kesalahan saat memperbarui jadwal: {e}"
+
+    # Ambil data dari Firebase untuk ditampilkan
+    jadwal_data = jadwal_ref.get()
+    students_data = students_ref.get()
+
+    golongan_data = []
+    unique_golongan = set()
+
+    if students_data:
+        for student_id, student_info in students_data.items():
+            golongan = student_info.get('golongan', '')
+            if golongan:
+                unique_golongan.add(golongan)
+
+    if jadwal_data:
+        for golongan, mata_kuliah_list in jadwal_data.items():
+            unique_golongan.add(golongan)
+            for mata_kuliah_id, mata_kuliah in mata_kuliah_list.items():
+                golongan_data.append({
+                    'golongan': golongan,
+                    'id': mata_kuliah_id,
+                    'kode_mk': mata_kuliah.get('kode_mk', ''),
+                    'mata_kuliah': mata_kuliah.get('name', ''),
+                    'jumlah_pertemuan': mata_kuliah.get('jumlah_pertemuan', 0),
+                    'start_time': mata_kuliah.get('start_time', ''),
+                    'end_time': mata_kuliah.get('end_time', '')
+                })
+
+    return render_template(
+        'admin_jadwal_mata_kuliah.html',
+        golongan_data=golongan_data,
+        dropdown_golongan=sorted(unique_golongan),
+        message=message,
+        edit_data=edit_data
+    )
+
+# Admin Mengatur Jadwal Absensi
+@app.route('/set_absensi', methods=['GET', 'POST'])
+def set_absensi():
+    if 'user' not in session:
+        return redirect('/')
+
+    if request.method == 'POST':
+        mata_kuliah = request.form['mata_kuliah']
+        tanggal = request.form['tanggal']
+        start_time = request.form['start_time']
+
+        try:
+            # Simpan waktu awal dalam format timestamp
+            start_timestamp = datetime.strptime(f"{tanggal} {start_time}", "%Y-%m-%d %H:%M").timestamp()
+
+            # Simpan jadwal absensi ke Firebase
+            attendance_ref = db.reference(f'attendance/{mata_kuliah}/{tanggal}')
+            attendance_ref.set({
+                'start_time': start_timestamp,
+                'students': {}
+            })
+
+            return render_template('set_absensi.html', message="Jadwal absensi berhasil disimpan!")
+        except Exception as e:
+            return render_template('set_absensi.html', message=f"Terjadi kesalahan: {str(e)}")
+
+    return render_template('set_absensi.html', message=None)
+
+@app.route('/absen', methods=['GET', 'POST'])
+def absen():
+    if 'mahasiswa' not in session:
+        return redirect('/login_mahasiswa')
+
+    mahasiswa = session['mahasiswa']  # Data mahasiswa
+    golongan = mahasiswa.get('golongan', '')  # Mengambil golongan dari session
+
+    # Menambahkan log untuk debugging
+    print(f"Golongan yang ada di session: {golongan}")
+
+    # Ambil daftar mata kuliah berdasarkan golongan
+    mata_kuliah_data = []
+    jadwal_ref = db.reference(f'jadwal_mata_kuliah/{golongan}')
+    jadwal_data = jadwal_ref.get()
+
+    if jadwal_data:
+        mata_kuliah_data = [{'kode': k, 'name': v['name']} for k, v in jadwal_data.items()]
+
+    if request.method == 'POST':
+        # Ambil data dari form
+        mata_kuliah = request.form.get('mata_kuliah')  # Kode mata kuliah
+        minggu_ke = request.form.get('minggu_ke')  # Minggu ke berapa
+        student_id = f"ID-{mahasiswa['nim']}"  # ID mahasiswa
+
+        # Validasi input
+        if not mata_kuliah or not minggu_ke:
+            return jsonify({'status': 'error', 'message': 'Pilih mata kuliah dan minggu ke terlebih dahulu!'})
+
+        # Cek validitas mata kuliah
+        mata_kuliah_name = next((mk['name'] for mk in mata_kuliah_data if mk['kode'] == mata_kuliah), None)
+        if not mata_kuliah_name:
+            return jsonify({'status': 'error', 'message': 'Mata kuliah tidak valid!'})
+
+        try:
+            # Simpan data absensi ke Firebase
+            attendance_ref = db.reference(f"attendance/{mata_kuliah}/{minggu_ke}/{student_id}")
+            attendance_data = {
+                "nim": mahasiswa['nim'],  # NIM mahasiswa
+                "name": mahasiswa['name'],  # Nama mahasiswa
+                "mata_kuliah": mata_kuliah_name,  # Nama mata kuliah
+                "kode_mata_kuliah": mata_kuliah,  # Kode mata kuliah
+                "status": "Hadir",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "image_url": "https://path-to-image.jpg",  # Ganti dengan URL gambar yang sebenarnya
+                "golongan": golongan  # Menambahkan golongan ke data absensi
+            }
+
+            # Menambahkan log untuk debugging
+            print(f"Data absensi yang dikirim: {attendance_data}")
+
+            attendance_ref.set(attendance_data)
+
+            # Berikan respons sukses ke frontend
+            return jsonify({'status': 'success', 'kode_mata_kuliah': mata_kuliah, 'nama_mata_kuliah': mata_kuliah_name, 'minggu_ke': minggu_ke, 'status': "Hadir", 'message': 'Absensi berhasil disimpan!'})
+        except Exception as e:
+            print(f"[ERROR] Gagal menyimpan absensi: {e}")
+            return jsonify({'status': 'error', 'message': 'Terjadi kesalahan saat menyimpan absensi.'})
+
+    # Jika metode GET, kirim data awal untuk ditampilkan di form
+    return render_template('absen.html', mahasiswa=mahasiswa, mata_kuliah_data=mata_kuliah_data)
+
+def run_face_recognition(user_id):
+    """
+    Fungsi untuk deteksi wajah dan menyimpan data absensi.
+    """
+    username_full = labels.get(user_id, "Unknown")
+    username = username_full.split("", 1)[1] if "" in username_full else username_full
+
+    video = cv2.VideoCapture(0)
+    if not video.isOpened():
+        print("[ERROR] Kamera tidak dapat dibuka. Pastikan kamera tersedia.")
+        return
+
+    face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+
+    locked_label = "Unknown"
+    lock_frames = 0
+    threshold_confidence = 0.75
+    min_consecutive_frames = 5
+    attendance_logged = False
+
+    print("[INFO] Mulai deteksi wajah...")
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            print("[ERROR] Tidak dapat membaca frame dari kamera.")
+            break
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+
+        if len(faces) == 0:
+            print("[INFO] Tidak ada wajah yang terdeteksi.")
+        else:
+            print(f"[INFO] {len(faces)} wajah terdeteksi.")
+
+        for (x, y, w, h) in faces:
+            face_img = frame[y:y + h, x:x + w]
+            face_img = cv2.resize(face_img, (224, 224))
+            face_img = np.expand_dims(face_img, axis=0) / 255.0
+
+            prediction = model.predict(face_img)
+            confidence = float(np.max(prediction[0]))
+            id_detected = str(np.argmax(prediction[0]) + 1)
+
+            print(f"[DEBUG] Deteksi: ID={id_detected}, Confidence={confidence:.2f}, Lock frames={lock_frames}")
+
+            if confidence >= threshold_confidence and id_detected == user_id:
+                lock_frames += 1
+                if lock_frames >= min_consecutive_frames and not attendance_logged:
+                    try:
+                        # Simpan frame sebagai gambar
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        image_path = f"attendance_{user_id}_{timestamp}.jpg"
+                        cv2.imwrite(image_path, frame)
+                        print("[INFO] Gambar berhasil disimpan:", image_path)
+
+                        # Unggah gambar ke Firebase Storage
+                        try:
+                            blob = bucket.blob(f'attendance_images/{image_path}')
+                            blob.upload_from_filename(image_path)
+                            blob.make_public()
+                            image_url = blob.public_url
+                            print("[SUCCESS] Gambar berhasil diunggah ke Firebase Storage. URL:", image_url)
+                        except Exception as e:
+                            print("[ERROR] Gagal mengunggah gambar ke Firebase Storage:", str(e))
+                            continue
+
+                        # Simpan data ke Firebase Realtime Database
+                        try:
+                            attendance_data = {
+                                'user_id': user_id,
+                                'username': username,
+                                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                'confidence': confidence,
+                                'image_url': image_url
+                            }
+                            db.reference(f'attendance/{user_id}').push(attendance_data)
+                            print("[SUCCESS] Data presensi berhasil disimpan:", attendance_data)
+                        except Exception as e:
+                            print("[ERROR] Gagal menyimpan data ke Firebase Realtime Database:", str(e))
+                            continue
+
+                        # Hapus gambar lokal
+                        os.remove(image_path)
+                        print("[INFO] Gambar lokal dihapus:", image_path)
+
+                        attendance_logged = True  # Tandai presensi sudah tercatat
+                        break  # Keluar dari loop setelah presensi berhasil
+                    except Exception as e:
+                        print("[ERROR] Terjadi kesalahan saat mencatat presensi:", str(e))
+            else:
+                lock_frames = 0
+
+        if attendance_logged:
+                 print("[INFO] Presensi selesai, keluar dari loop.")
+                 break
+
+    video.release()
+    cv2.destroyAllWindows()
+    if not attendance_logged:
+        print("[ERROR] Presensi tidak tercatat. Pastikan wajah terlihat jelas.")
+
+@app.route('/rekap_absensi', methods=['GET'])
+def rekap_absensi():
+    if 'mahasiswa' not in session:
+        return redirect('/login_mahasiswa')
+
+    mahasiswa = session['mahasiswa']
+    attendance_ref = db.reference("attendance")
+    attendance_data = attendance_ref.get() or {}
+
+    mahasiswa_attendance = []
+
+    # Iterasi data absensi
+    for kode_mata_kuliah, minggu_data in attendance_data.items():
+        # Pastikan minggu_data adalah dictionary atau list
+        if isinstance(minggu_data, dict):
+            for minggu, student_data in minggu_data.items():
+                # Cek apakah student_data bukan None
+                if student_data and mahasiswa['id'] in student_data:
+                    # Masuk ke key acak
+                    for random_key, detail in student_data[mahasiswa['id']].items():
+                        # Cek apakah detail adalah dictionary sebelum memanggil .get()
+                        if isinstance(detail, dict):
+                            mahasiswa_attendance.append({
+                                "kode_mata_kuliah": detail.get("kode_mata_kuliah", "Unknown"),
+                                "nama_mata_kuliah": detail.get("nama_mata_kuliah", "Unknown"),
+                                "minggu": minggu,
+                                "timestamp": detail.get("timestamp", "Tidak Ada Data"),
+                                "status": detail.get("status", "Tidak Hadir"),
+                                "image_url": detail.get("image_url", None)
+                            })
+                        else:
+                            # Jika detail bukan dictionary, tampilkan pesan debug
+                            print(f"[DEBUG] Detail for {random_key} is not a dictionary: {detail}")
+
+        elif isinstance(minggu_data, list):
+            # Handle jika minggu_data adalah list
+            for index, student_data in enumerate(minggu_data):
+                # Cek apakah student_data bukan None
+                if student_data and mahasiswa['id'] in student_data:
+                    for random_key, detail in student_data[mahasiswa['id']].items():
+                        if isinstance(detail, dict):
+                            mahasiswa_attendance.append({
+                                "kode_mata_kuliah": detail.get("kode_mata_kuliah", "Unknown"),
+                                "nama_mata_kuliah": detail.get("nama_mata_kuliah", "Unknown"),
+                                "minggu": index,  # Menggunakan index minggu dari list
+                                "timestamp": detail.get("timestamp", "Tidak Ada Data"),
+                                "status": detail.get("status", "Tidak Hadir"),
+                                "image_url": detail.get("image_url", None)
+                            })
+                        else:
+                            # Jika detail bukan dictionary, tampilkan pesan debug
+                            print(f"[DEBUG] Detail for {random_key} is not a dictionary: {detail}")
+
+    # Debug data absensi mahasiswa
+    print(f"[DEBUG] Mahasiswa Attendance: {mahasiswa_attendance}")
+
+    return render_template(
+        'rekap_absensi.html',
+        mahasiswa=mahasiswa,
+        attendance_list=mahasiswa_attendance
+    )
+
+
+@app.route('/check_absen_status', methods=['GET'])
+def check_absen_status():
+    # Mendapatkan parameter dari URL
+    user_id = request.args.get('user_id')
+    mata_kuliah = request.args.get('mata_kuliah')  # Harus berupa kode asli
+    minggu_ke = request.args.get('minggu_ke')
+
+    # Validasi parameter
+    if not user_id or not mata_kuliah or not minggu_ke:
+        print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id', 'mata_kuliah', dan 'minggu_ke' disertakan.")
+        return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
+
+    print(f"[DEBUG] Checking attendance for user_id={user_id}, mata_kuliah={mata_kuliah}, minggu_ke={minggu_ke}")
+
+    try:
+        # Referensi ke lokasi data absensi di Firebase Realtime Database
+        attendance_ref = db.reference(f"attendance/{mata_kuliah}/{minggu_ke}/{user_id}")
+        data = attendance_ref.get()
+
+        if data:
+            print("[DEBUG] Attendance Data Found:", data)
+            return jsonify({"status": "success", "data": data})
+        else:
+            print("[DEBUG] Attendance Data Not Found")
+            return jsonify({"status": "pending", "message": "Data absensi tidak ditemukan"}), 404
+    except Exception as e:
+        # Menangkap kesalahan selama proses membaca data dari Firebase
+        print(f"[ERROR] Terjadi kesalahan saat memeriksa status absensi: {e}")
+        return jsonify({"status": "error", "message": "Terjadi kesalahan server"}), 500
+
+
+# Fungsi untuk menyimpan progres
+def save_progress(progress):
+    with open('progress.json', 'w') as f:
+        json.dump({'progress': progress}, f)
+
+# Halaman Training Model
+@app.route('/train', methods=['GET', 'POST'])
+def train():
+    if 'user' not in session:
+        return redirect('/')
+
+    if request.method == 'POST':
+        try:
+            import tensorflow as tf
+            from tensorflow.keras import layers, models
+            from tensorflow.keras.optimizers import Adam
+            from tensorflow.keras.preprocessing.image import ImageDataGenerator
+            from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+            import matplotlib.pyplot as plt
+            from sklearn.metrics import confusion_matrix, classification_report
+            import numpy as np
+            import seaborn as sns
+            import os
+            import json
+
+            # Konfigurasi dataset
+            dataset_path = "DataSet"
+            test_dataset_path = "DataTest"
+            img_size = (224, 224)
+            batch_size = 32
+
+            # Augmentasi Data
+            train_gen = ImageDataGenerator(
+                rescale=1.0 / 255,
+                validation_split=0.2,
+                rotation_range=10,
+                width_shift_range=0.1,
+                height_shift_range=0.1,
+                shear_range=0.1,
+                zoom_range=0.1,
+                brightness_range=[0.8, 1.2],
+                horizontal_flip=True,
+                fill_mode="nearest"
+            )
+
+            # Data training dan validasi
+            train_data = train_gen.flow_from_directory(
+                dataset_path,
+                target_size=img_size,
+                color_mode='rgb',
+                batch_size=batch_size,
+                class_mode='categorical',
+                subset='training'
+            )
+
+            valid_data = train_gen.flow_from_directory(
+                dataset_path,
+                target_size=img_size,
+                color_mode='rgb',
+                batch_size=batch_size,
+                class_mode='categorical',
+                subset='validation'
+            )
+
+            # Jumlah kelas
+            num_classes = train_data.num_classes
+
+            # Model MobileNetV2
+            mobilenet = tf.keras.applications.MobileNetV2(
+                include_top=False,
+                weights='imagenet',
+                input_shape=(224, 224, 3)
+            )
+
+            for layer in mobilenet.layers[:-10]:
+                layer.trainable = False
+
+            # Tambahkan lapisan klasifikasi
+            model = models.Sequential([
+                mobilenet,
+                layers.GlobalAveragePooling2D(),
+                layers.Dense(128, activation='relu'),
+                layers.Dropout(0.5),
+                layers.Dense(num_classes, activation='softmax')
+            ])
+
+            # Kompilasi model
+            model.compile(
+                optimizer=Adam(learning_rate=0.00001),
+                loss='categorical_crossentropy',
+                metrics=['accuracy']
+            )
+
+            # Callback untuk menyimpan progres
+            class ProgressCallback(tf.keras.callbacks.Callback):
+                def on_epoch_end(self, epoch, logs=None):
+                    progress = logs.get('accuracy') * 100  # Simpan akurasi sebagai progres
+                    save_progress(progress)  # Memanggil fungsi save_progress
+                    print(f"Epoch {epoch + 1}: Progres = {progress}%")  # Log untuk debugging
+
+            # Callbacks
+            early_stopping = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+            checkpoint = ModelCheckpoint('models/best_finetuned_model_mobilenet.keras', monitor='val_accuracy', save_best_only=True)
+
+            # Pelatihan model
+            history = model.fit(
+                train_data,
+                validation_data=valid_data,
+                epochs=30,
+                callbacks=[early_stopping, checkpoint, ProgressCallback()]
+            )
+
+            # Simpan model akhir
+            final_model_path = "models/finetuned_face_recognition_model_mobilenet.keras"
+            model.save(final_model_path)
+
+            # Simpan label map
+            label_map = train_data.class_indices
+            label_map = {str(int(v) + 1): k for k, v in label_map.items()}
+            with open('label_map.json', 'w') as f:
+                json.dump(label_map, f)
+
+                      # ----- Evaluasi Model pada Data Testing -----
+            print("----- Evaluasi Model pada Data Testing -----")
+
+            # ImageDataGenerator untuk data testing tanpa augmentasi
+            test_gen = ImageDataGenerator(rescale=1.0 / 255)
+
+            # Data testing
+            test_data = test_gen.flow_from_directory(
+                test_dataset_path,
+                target_size=img_size,
+                color_mode='rgb',
+                batch_size=batch_size,
+                class_mode='categorical',
+                shuffle=False
+            )
+
+            # Evaluasi model pada data testing
+            test_loss, test_accuracy = model.evaluate(test_data)
+            print("Loss pada Data Testing:", test_loss)
+            print("Akurasi pada Data Testing:", test_accuracy)
+
+            # Confusion Matrix untuk Data Testing
+            y_pred_test = model.predict(test_data)
+            y_pred_classes_test = np.argmax(y_pred_test, axis=1)
+            y_true_test = test_data.classes
+
+            cm_test = confusion_matrix(y_true_test, y_pred_classes_test)
+            cm_labels_test = list(test_data.class_indices.keys())
+
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(cm_test, annot=True, fmt='d', cmap='Blues', xticklabels=cm_labels_test, yticklabels=cm_labels_test)
+            plt.title('Confusion Matrix (Data Testing)')
+            plt.xlabel('Predicted Label')
+            plt.ylabel('True Label')
+            plt.savefig('static/confusion_matrix_test.png')
+
+            # ----- Confusion Matrix untuk Dataset Keseluruhan -----
+            print("----- Confusion Matrix untuk Dataset Keseluruhan -----")
+            full_data_gen = ImageDataGenerator(rescale=1.0 / 255)
+            full_data = full_data_gen.flow_from_directory(
+                dataset_path,
+                target_size=img_size,
+                color_mode='rgb',
+                batch_size=batch_size,
+                class_mode='categorical',
+                shuffle=False
+            )
+
+            y_pred_full = model.predict(full_data)
+            y_pred_classes_full = np.argmax(y_pred_full, axis=1)
+            y_true_full = full_data.classes
+
+            cm_full = confusion_matrix(y_true_full, y_pred_classes_full)
+            cm_labels_full = list(full_data.class_indices.keys())
+
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(cm_full, annot=True, fmt='d', cmap='Oranges', xticklabels=cm_labels_full, yticklabels=cm_labels_full)
+            plt.title('Confusion Matrix (Dataset Keseluruhan)')
+            plt.xlabel('Predicted Label')
+            plt.ylabel('True Label')
+            plt.savefig('static/confusion_matrix_full.png')
+
+            # Grafik Akurasi dan Loss
+            plt.figure(figsize=(8, 6))
+            plt.plot(history.history['accuracy'], label='Akurasi Training')
+            plt.plot(history.history['val_accuracy'], label='Akurasi Validasi')
+            plt.title('Akurasi Training dan Validasi')
+            plt.xlabel('Epochs')
+            plt.ylabel('Accuracy')
+            plt.legend()
+            plt.grid()
+            plt.savefig('static/training_validation_accuracy.png')
+
+            plt.figure(figsize=(8, 6))
+            plt.plot(history.history['loss'], label='Loss Training')
+            plt.plot(history.history['val_loss'], label='Loss Validasi')
+            plt.title('Loss Training dan Validasi')
+            plt.xlabel('Epochs')
+            plt.ylabel('Loss')
+            plt.legend()
+            plt.grid()
+            plt.savefig('static/training_validation_loss.png')
+
+            # Classification Report
+            report = classification_report(y_true_test, y_pred_classes_test, target_names=cm_labels_test, output_dict=True)
+            report_path = 'static/classification_report.json'
+            with open(report_path, 'w') as f:
+                json.dump(report, f)
+
+            return render_template(
+                'train.html',
+                message="Model berhasil dilatih dan dievaluasi!",
+                test_accuracy=test_accuracy,
+                test_loss=test_loss,
+                confusion_matrix_path='static/confusion_matrix_test.png',
+                full_confusion_matrix_path='static/confusion_matrix_full.png',
+                accuracy_path='static/training_validation_accuracy.png',
+                loss_path='static/training_validation_loss.png',
+                report_path=report_path
+            )
+
+        except Exception as e:
+            return render_template('train.html', message=f"Terjadi kesalahan saat pelatihan: {str(e)}")
+
+    return render_template('train.html', message=None)
+
+# Endpoint untuk polling progres
+@app.route('/get_progress', methods=['GET'])
+def get_progress():
+    try:
+        with open('progress.json', 'r') as f:
+            progress_data = json.load(f)
+        return jsonify(progress_data)
+    except FileNotFoundError:
+        return jsonify({'progress': 0})
+
+
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    session.pop('mahasiswa', None)
+    return redirect('/')
+
+# Jalankan aplikasi Flask
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
