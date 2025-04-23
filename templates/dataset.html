@@ -56,13 +56,13 @@
             <li class="nav-item">
                 <a class="nav-link" href="/attendance">
                     <i class="fas fa-list"></i>
-                    <span>Mahasiswa Attendance</span>
+                    <span>Karyawan Attendance</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="/admin/jadwal_mata_kuliah">
+                <a class="nav-link" href="/admin/jadwal_kerja">
                     <i class="fas fa-calendar"></i>
-                    <span>Jadwal Mata Kuliah</span>
+                    <span>Jadwal Kerja</span>
                 </a>
             </li>
             <li class="nav-item">
@@ -103,7 +103,7 @@
                 <div class="container-fluid">
 
                     <!-- Page Heading -->
-                    <h1 class="h3 mb-4 text-gray-800">Tambah Dataset Mahasiswa</h1>
+                    <h1 class="h3 mb-4 text-gray-800">Tambah Dataset Karyawan</h1>
 
                     <!-- Content Row -->
                     <div class="row">
@@ -117,30 +117,18 @@
                                 <div class="card-body">
                                     <form id="dataset-form">
                                         <div class="form-group">
-                                            <label for="name">Nama Mahasiswa:</label>
+                                            <label for="name">Nama Karyawan:</label>
                                             <input type="text" class="form-control" id="name" name="name" placeholder="Masukkan nama" required>
                                         </div>
                                         <div class="form-group">
-                                            <label for="nim">NIM:</label>
-                                            <input type="text" class="form-control" id="nim" name="nim" placeholder="Masukkan NIM" required>
+                                            <label for="id_karyawan">ID Karyawan:</label>
+                                            <input type="text" class="form-control" id="id_karyawan" name="id_karyawan" placeholder="Masukkan Id Karyawan" required>
                                         </div>
                                         <div class="form-group">
-                                            <label for="golongan">Golongan:</label>
-                                            <input type="text" class="form-control" id="golongan" name="golongan" placeholder="Masukkan Golongan" required>
+                                            <label for="jabatan">Jabatan:</label>
+                                            <input type="text" class="form-control" id="jabatan" name="jabatan" placeholder="Masukkan Jabatan" required>
                                         </div>
-                                        <div class="form-group">
-                                            <label for="semester">Semester:</label>
-                                            <input type="number" class="form-control" id="semester" name="semester" placeholder="Masukkan Semester (1-8)" min="1" max="8" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="tahun_ajaran">Tahun Ajaran:</label>
-                                            <input type="text" class="form-control" id="tahun_ajaran" name="tahun_ajaran" placeholder="Contoh: 2024/2025" pattern="^\d{4}/\d{4}$" required>
-                                            <small class="form-text text-muted">Gunakan format YYYY/YYYY, contoh: 2024/2025.</small>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="student_id">ID Mahasiswa:</label>
-                                            <input type="text" class="form-control" id="student_id" name="student_id" disabled>
-                                        </div>
+                                        
 
                                         <!-- Kamera -->
                                         <div class="form-group text-center">
@@ -232,25 +220,12 @@
             captureCount = 0;
 
             const name = document.getElementById('name').value;
-            const nim = document.getElementById('nim').value;
-            const golongan = document.getElementById('golongan').value;
-            const semester = document.getElementById('semester').value;
-            const tahunAjaran = document.getElementById('tahun_ajaran').value;
+            const id_karyawan = document.getElementById('id_karyawan').value;
+            const jabatan = document.getElementById('jabatan').value;
 
             // Validasi input
-            if (!name || !nim || !golongan || !semester || !tahunAjaran) {
+            if (!name || !id_karyawan || !jabatan) {
                 alert("Semua field harus diisi sebelum memulai pengambilan gambar!");
-                return;
-            }
-
-            if (semester < 1 || semester > 8) {
-                alert("Semester harus berada dalam rentang 1-8.");
-                return;
-            }
-
-            const yearPattern = /^\d{4}\/\d{4}$/;
-            if (!tahunAjaran.match(yearPattern)) {
-                alert("Tahun Ajaran harus dalam format YYYY/YYYY. Contoh: 2024/2025");
                 return;
             }
 
@@ -261,10 +236,8 @@
 
             const formData = new FormData();
             formData.append('name', name);
-            formData.append('nim', nim);
-            formData.append('golongan', golongan);
-            formData.append('semester', semester);
-            formData.append('tahun_ajaran', tahunAjaran);
+            formData.append('id_karyawan', id_karyawan);
+            formData.append('jabatan', jabatan);
 
             statusText.innerText = "Sedang mengambil dataset, harap tunggu...";
             returnButton.style.display = "none";
@@ -309,10 +282,11 @@
             captureAndSendImage();
         }
 
-        function generateStudentID() {
-            const timestamp = Date.now();
-            document.getElementById('student_id').value = `ID-${timestamp}`;
-        }
+        // Mulai kamera saat halaman dimuat
+        window.onload = function() {
+            startCamera();
+        };
+
     </script>
 </body>
 

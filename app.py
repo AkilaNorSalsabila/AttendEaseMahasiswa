@@ -25,6 +25,7 @@ dataset_path = 'DataSet'
 
 
 
+# Inisialisasi Firebase
 
 
 # Load model hasil fine-tuning
@@ -267,43 +268,42 @@ def video_feed(user_id, mata_kuliah, minggu_ke, nim):
 
 
 # Memanmbahkan Dataset
+# Memanmbahkan Dataset 
 @app.route('/dataset', methods=['GET', 'POST'])
 def dataset():
     """
-    Route untuk menambahkan dataset mahasiswa.
+    Route untuk menambahkan dataset karyawan.
     """
     if request.method == 'GET':
-        mahasiswa = {
+        karyawan = {
             'nama': 'John Doe',
-            'nim': '321',
-            'golongan': 'A',
-            'semester': 1,  # Default Semester
-            'tahun_ajaran': '2024/2025'  # Default Tahun Ajaran
+            'id_karyawan': '123',
+            'jabatan': 'Manager',
+            
         }
-        return render_template('dataset.html', mahasiswa=mahasiswa)
+        return render_template('dataset.html', karyawan=karyawan)
 
     elif request.method == 'POST':
         try:
             # Ambil data dari form
-            name = request.form.get('name')  # Nama mahasiswa
-            nim = request.form.get('nim')  # NIM mahasiswa
-            golongan = request.form.get('golongan')  # Golongan kelas
-            semester = request.form.get('semester')  # Semester
-            tahun_ajaran = request.form.get('tahun_ajaran') 
+            name = request.form.get('name')  # Nama karyawan
+            id_karyawan = request.form.get('id_karyawan')  # ID karyawan
+            jabatan = request.form.get('jabatan')  # Jabatan karyawan
+           
 
-            # Validasi NIM (harus berupa angka/huruf)
-            if not nim or not nim.isalnum():
-                return jsonify({'status': 'error', 'message': 'NIM harus berupa huruf atau angka tanpa karakter khusus!'}), 400
+            # Validasi ID karyawan (harus berupa angka/huruf)
+            if not id_karyawan or not id_karyawan.isalnum():
+                return jsonify({'status': 'error', 'message': 'ID Karyawan harus berupa huruf atau angka tanpa karakter khusus!'}), 400
 
-            # Buat student_id dengan format "ID-{nim}"
-            student_id = f'ID-{nim}'
+            # Buat employee_id dengan format "Karyawan-{id_karyawan}"
+            employee_id = f'Karyawan-{id_karyawan}'
 
             # Validasi input
-            if not all([name, nim, golongan]):
-                return jsonify({'status': 'error', 'message': 'Nama, NIM, dan Golongan harus diisi!'}), 400
+            if not all([name, id_karyawan, jabatan]):
+                return jsonify({'status': 'error', 'message': 'Nama, ID Karyawan, dan Jabatan harus diisi!'}), 400
 
             # Buat folder penyimpanan dengan format "<ID>-<Nama>"
-            folder_name = f"{student_id}-{name.replace(' ', '_')}"  # Replace spasi dengan underscore
+            folder_name = f"{employee_id}-{name.replace(' ', '_')}"  # Replace spasi dengan underscore
             folder_path = os.path.join(dataset_path, folder_name)
             os.makedirs(folder_path, exist_ok=True)
 
@@ -375,9 +375,9 @@ def dataset():
                     # Proses wajah dan simpan ke folder
                     total_faces_saved = process_and_crop_faces(
                         image=img,
-                        file_name_prefix=student_id,
+                        file_name_prefix=employee_id,
                         save_folder=folder_path,
-                        user_id=student_id,
+                        user_id=employee_id,
                         user_name=name,
                         start_count=total_faces_saved
                     )
@@ -387,27 +387,25 @@ def dataset():
             if total_faces_saved == 0:
                 return jsonify({'status': 'error', 'message': 'Tidak ada wajah yang berhasil disimpan!'}), 400
 
-            # Simpan data mahasiswa ke Firebase
-            # Simpan data mahasiswa ke Firebase, termasuk jumlah gambar
-            student_ref = db.reference(f'students/{student_id}')
+            # Simpan data karyawan ke Firebase
+            # Simpan data karyawan ke Firebase, termasuk jumlah gambar
+            employee_ref = db.reference(f'employees/{employee_id}')
             images_count = len([f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
             print(f"[DEBUG] Jumlah gambar yang disimpan: {images_count}")
 
-            student_ref.set({
-                'id': student_id,      # ID dengan format "ID-{nim}"
-                'name': name,          # Nama mahasiswa
-                'nim': nim,            # NIM hanya angka/huruf
-                'golongan': golongan,  # Golongan kelas
-                'semester': int(semester),
-                'tahun_ajaran': tahun_ajaran,
+            employee_ref.set({
+                'id': employee_id,      # ID dengan format "Karyawan-{id_karyawan}"
+                'name': name,           # Nama karyawan
+                'id_karyawan': id_karyawan,  # ID Karyawan hanya angka/huruf
+                'jabatan': jabatan,     # Jabatan karyawan
                 'images_count': images_count,
                 'timestamp': datetime.now().isoformat()
                 })
-            print(f"[DEBUG] Metadata mahasiswa diperbarui di Firebase: {student_id}")
+            print(f"[DEBUG] Metadata karyawan diperbarui di Firebase: {employee_id}")
             return jsonify({
                 'status': 'success',
                 'message': f'Dataset berhasil disimpan. Total wajah yang disimpan: {total_faces_saved}',
-                'student_id': student_id
+                'employee_id': employee_id
             })
 
         except Exception as e:
@@ -418,24 +416,24 @@ def upload_dataset_to_firebase():
     try:
         # Firebase references
         bucket = storage.bucket()
-        students_ref = db.reference('students')
+        employees_ref = db.reference('employees')
 
         print(f"Memproses folder dataset: {dataset_path}")
 
-        for student_folder in os.listdir(dataset_path):
-            folder_path = os.path.join(dataset_path, student_folder)
+        for employee_folder in os.listdir(dataset_path):
+            folder_path = os.path.join(dataset_path, employee_folder)
 
             # Abaikan jika bukan folder
             if not os.path.isdir(folder_path):
                 continue
 
-            print(f"Memproses folder: {student_folder}")
+            print(f"Memproses folder: {employee_folder}")
 
-            # Ekstrak NIM dari folder
-            if "ID-" in student_folder:
-                nim = student_folder.split("ID-")[1]
+            # Ekstrak ID Karyawan dari folder
+            if "Karyawan-" in employee_folder:
+                id_karyawan = employee_folder.split("Karyawan-")[1]
             else:
-                print(f"Folder {student_folder} tidak memiliki format 'ID-{NIM}'. Abaikan.")
+                print(f"Folder {employee_folder} tidak memiliki format 'Karyawan-{id_karyawan}'. Abaikan.")
                 continue
 
             # Hitung jumlah file gambar
@@ -445,7 +443,7 @@ def upload_dataset_to_firebase():
             # Unggah setiap file gambar ke Firebase Storage
             for image_file in image_files:
                 local_file_path = os.path.join(folder_path, image_file)
-                cloud_file_path = f"datasets/{student_folder}/{image_file}"
+                cloud_file_path = f"datasets/{employee_folder}/{image_file}"
 
                 # Upload file ke Firebase Storage
                 blob = bucket.blob(cloud_file_path)
@@ -455,18 +453,16 @@ def upload_dataset_to_firebase():
 
             # Simpan metadata ke Realtime Database
             metadata = {
-                'id': student_folder,
-                'nim': nim,
-                'name': student_folder.split('', 1)[1] if '' in student_folder else "Unknown",
-                'golongan': "A",
-                'semester': int(semester),
-                'tahun_ajaran': tahun_ajaran,
+                'id': employee_folder,
+                'id_karyawan': id_karyawan,
+                'name': employee_folder.split('', 1)[1] if '' in employee_folder else "Unknown",
+                'jabatan': "Manager",
                 'images_count': images_count,
                 'timestamp': datetime.now().isoformat()
             }
-            students_ref.child(student_folder).set(metadata)
+            employees_ref.child(employee_folder).set(metadata)
 
-            print(f"Metadata untuk {student_folder} berhasil disimpan: {metadata}")
+            print(f"Metadata untuk {employee_folder} berhasil disimpan: {metadata}")
 
     except Exception as e:
         print(f"Terjadi kesalahan: {e}")
@@ -474,8 +470,6 @@ def upload_dataset_to_firebase():
 # Jalankan fungsi
 upload_dataset_to_firebase()
 
-
-import re
 
 
 @app.route('/attendance', methods=['GET', 'POST'])
@@ -686,39 +680,65 @@ def delete_student(student_id):
 @app.route('/students', methods=['GET'])
 def get_students():
     try:
+        combined_data = []
+
+        # Ambil data mahasiswa
         students_ref = db.reference('students')
         students_data = students_ref.get()
-
-        students = []
         if students_data:
             for student_id, student_info in students_data.items():
                 folder_path = os.path.join(dataset_path, student_id)
                 if os.path.exists(folder_path):
-                    images_count = len([f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
-                    
-                    # Update Firebase jika data tidak ada
+                    images_count = len([
+                        f for f in os.listdir(folder_path)
+                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                    ])
                     if 'images_count' not in student_info or student_info['images_count'] == 0:
                         student_ref = db.reference(f'students/{student_id}')
                         student_ref.update({'images_count': images_count})
-                
-                # Tambahkan data ke response
-                students.append({
+
+                combined_data.append({
                     'id': student_id,
                     'name': student_info.get('name', 'Unknown'),
-                    'nim': student_info.get('nim', 'Unknown'),
                     'golongan': student_info.get('golongan', 'Unknown'),
                     'semester': student_info.get('semester', ''),
+                    'jabatan': '-',  # kosongkan karena mahasiswa
                     'images_count': student_info.get('images_count', 0),
-                    'edit_url': f'/students/edit/{student_id}',  # URL untuk edit
-                    'delete_url': f'/students/delete/{student_id}'  # URL untuk hapus
+                    'edit_url': f'/students/edit/{student_id}',
+                    'delete_url': f'/students/delete/{student_id}'
                 })
 
-        return jsonify({'status': 'success', 'data': students})
-    except Exception as e:
-        print(f"Error saat mengambil data mahasiswa dari Firebase: {str(e)}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-    
+        # Ambil data karyawan
+        employees_ref = db.reference('employees')
+        employees_data = employees_ref.get()
+        if employees_data:
+            for emp_id, emp_info in employees_data.items():
+                folder_path = os.path.join(dataset_path, emp_id)
+                if os.path.exists(folder_path):
+                    images_count = len([
+                        f for f in os.listdir(folder_path)
+                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                    ])
+                    if 'images_count' not in emp_info or emp_info['images_count'] == 0:
+                        emp_ref = db.reference(f'employees/{emp_id}')
+                        emp_ref.update({'images_count': images_count})
 
+                combined_data.append({
+                    'id': emp_id,
+                    'name': emp_info.get('name', 'Unknown'),
+                    'golongan': '-',  # kosongkan karena karyawan
+                    'semester': '-',  # kosongkan karena karyawan
+                    'jabatan': emp_info.get('jabatan', 'Unknown'),
+                    'images_count': emp_info.get('images_count', 0),
+                    'edit_url': f'/students/edit/{emp_id}',  # kamu bisa sesuaikan endpoint edit-nya
+                    'delete_url': f'/students/delete/{emp_id}'  # kamu bisa sesuaikan juga
+                })
+
+        return jsonify({'status': 'success', 'data': combined_data})
+
+    except Exception as e:
+        print(f"Error saat mengambil data: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
     
 @app.route('/admin/jadwal_mata_kuliah/delete/<golongan>/<jadwal_id>', methods=['POST'])
 def delete_jadwal(golongan, jadwal_id):
@@ -797,137 +817,112 @@ def edit_jadwal():
     return redirect(f'/admin/jadwal_mata_kuliah?message={message}')
 
 
-# Admin Melihat Jadwal Mata Kuliah
-@app.route('/admin/jadwal_mata_kuliah', methods=['GET', 'POST'])
-def admin_jadwal_mata_kuliah():
-    """
-    Route untuk melihat dan mengelola jadwal mata kuliah.
-    """
+# Admin Melihat dan Mengelola Jadwal Kerja
+@app.route('/admin/jadwal_kerja', methods=['GET', 'POST'])
+def admin_jadwal_kerja():
     if 'user' not in session:
         return redirect('/')
 
-    jadwal_ref = db.reference('jadwal_mata_kuliah')
-    students_ref = db.reference('students')
-
+    # Referensi ke Firebase Realtime Database
+    jadwal_ref = db.reference('jadwal_kerja')
     edit_data = None
     message = None
 
     if request.method == 'POST':
         action = request.form.get('action')
 
+        # Tambah jadwal baru
         if action == 'add':
-            # Tambah jadwal baru
-            golongan = request.form.get('golongan')
-            kode_mk = request.form.get('kode_mk')
-            jumlah_pertemuan = int(request.form.get('jumlah_pertemuan', 0))
-            mata_kuliah = request.form.get('mata_kuliah')
-            start_time = request.form.get('start_time')
-            end_time = request.form.get('end_time')
+            jabatan = request.form.get('jabatan')
+            id_jadwal = request.form.get('id_jadwal')
+            jam_masuk = request.form.get('jam_masuk')
+            jam_pulang = request.form.get('jam_pulang')
+            toleransi = request.form.get('toleransi', 15)
 
-            if not all([golongan, kode_mk, jumlah_pertemuan, mata_kuliah, start_time, end_time]) or jumlah_pertemuan <= 0:
-                message = "Semua field harus diisi dengan benar!"
+            if not all([jabatan, id_jadwal, jam_masuk, jam_pulang]):
+                message = "Semua field wajib diisi!"
             else:
                 try:
-                    # Tambahkan data ke Firebase dengan kode_mk sebagai ID
-                    jadwal_ref.child(golongan).child(kode_mk).set({
-                        'kode_mk': kode_mk,  # ID mata kuliah
-                        'name': mata_kuliah,
-                        'jumlah_pertemuan': jumlah_pertemuan,
-                        'start_time': start_time,
-                        'end_time': end_time
+                    toleransi = int(toleransi)
+                    jadwal_ref.child(jabatan).child(id_jadwal).set({
+                        'id_jadwal': id_jadwal,
+                        'jam_masuk': jam_masuk,
+                        'jam_pulang': jam_pulang,
+                        'toleransi_keterlambatan': toleransi
                     })
-                    new_jadwal_id = jadwal_ref.key
-                    print(f"Jadwal Baru Ditambahkan dengan ID: {new_jadwal_id}")
-                    message = "Jadwal berhasil ditambahkan!"
-                except Exception as e:
-                    message = f"Terjadi kesalahan saat menambahkan jadwal: {e}"
+                    message = "Jadwal kerja berhasil ditambahkan!"
+                except ValueError:
+                    message = "Toleransi harus berupa angka!"
 
+        # Persiapan edit jadwal
         elif action == 'prepare_edit':
-            # Siapkan data untuk diedit
-            edit_golongan = request.form.get('edit_golongan')
-            edit_id = request.form.get('edit_id')
+            jabatan = request.form.get('edit_jabatan')
+            id_jadwal = request.form.get('edit_id')
 
-            if not edit_golongan or not edit_id:
-                message = "Data untuk edit tidak lengkap!"
+            if jabatan and id_jadwal:
+                edit_ref = jadwal_ref.child(jabatan).child(id_jadwal)
+                data = edit_ref.get()
+                if data:
+                    edit_data = {
+                        'jabatan': jabatan,
+                        'id_jadwal': id_jadwal,
+                        'jam_masuk': data.get('jam_masuk', ''),
+                        'jam_pulang': data.get('jam_pulang', ''),
+                        'toleransi_keterlambatan': data.get('toleransi_keterlambatan', 15)
+                    }
+                else:
+                    message = "Data tidak ditemukan!"
             else:
-                try:
-                    # Ambil data jadwal berdasarkan golongan dan ID
-                    jadwal_edit_ref = jadwal_ref.child(edit_golongan).child(edit_id)
-                    jadwal_edit = jadwal_edit_ref.get()
-                    if jadwal_edit:
-                        edit_data = {
-                            'golongan': edit_golongan,
-                            'id': edit_id,
-                            'kode_mk': jadwal_edit.get('kode_mk', ''),
-                            'name': jadwal_edit.get('name', ''),  # Nama mata kuliah
-                            'jumlah_pertemuan': jadwal_edit.get('jumlah_pertemuan', 0),
-                            'start_time': jadwal_edit.get('start_time', ''),
-                            'end_time': jadwal_edit.get('end_time', '')
-                        }
-                    else:
-                        message = "Jadwal yang akan diedit tidak ditemukan!"
-                except Exception as e:
-                    message = f"Terjadi kesalahan saat menyiapkan data edit: {e}"
+                message = "Data tidak lengkap untuk proses edit!"
 
+        # Update data jadwal
         elif action == 'update':
-            # Update jadwal yang ada
-            edit_golongan = request.form.get('edit_golongan')
-            edit_id = request.form.get('edit_id')
-            kode_mk = request.form.get('kode_mk')
-            jumlah_pertemuan = int(request.form.get('jumlah_pertemuan', 0))
-            mata_kuliah = request.form.get('mata_kuliah')
-            start_time = request.form.get('start_time')
-            end_time = request.form.get('end_time')
+            jabatan = request.form.get('jabatan')
+            id_jadwal = request.form.get('id_jadwal')
+            jam_masuk = request.form.get('jam_masuk')
+            jam_pulang = request.form.get('jam_pulang')
+            toleransi = request.form.get('toleransi', 15)
 
-            if not all([edit_golongan, edit_id, kode_mk, mata_kuliah, start_time, end_time]) or jumlah_pertemuan <= 0:
-                message = "Semua field harus diisi untuk menyimpan perubahan!"
+            if not all([jabatan, id_jadwal, jam_masuk, jam_pulang]):
+                message = "Semua field wajib diisi!"
             else:
                 try:
-                    jadwal_ref.child(edit_golongan).child(edit_id).update({
-                    'kode_mk': kode_mk,
-                    'name': mata_kuliah,
-                    'jumlah_pertemuan': jumlah_pertemuan,
-                    'start_time': start_time,
-                    'end_time': end_time
-})
+                    toleransi = int(toleransi)
+                    jadwal_ref.child(jabatan).child(id_jadwal).update({
+                        'jam_masuk': jam_masuk,
+                        'jam_pulang': jam_pulang,
+                        'toleransi_keterlambatan': toleransi
+                    })
                     message = "Jadwal berhasil diperbarui!"
-                except Exception as e:
-                    message = f"Terjadi kesalahan saat memperbarui jadwal: {e}"
+                except ValueError:
+                    message = "Toleransi harus berupa angka!"
 
-    # Ambil data dari Firebase untuk ditampilkan
+    # Ambil semua data jadwal dari Firebase
     jadwal_data = jadwal_ref.get()
-    students_data = students_ref.get()
 
-    golongan_data = []
-    unique_golongan = set()
+    if jadwal_data is None:
+        jadwal_data = {}
 
-    if students_data:
-        for student_id, student_info in students_data.items():
-            golongan = student_info.get('golongan', '')
-            if golongan:
-                unique_golongan.add(golongan)
-
-    if jadwal_data:
-        for golongan, mata_kuliah_list in jadwal_data.items():
-            unique_golongan.add(golongan)
-            for mata_kuliah_id, mata_kuliah in mata_kuliah_list.items():
-                golongan_data.append({
-                    'golongan': golongan,
-                    'id': mata_kuliah_id,
-                    'kode_mk': mata_kuliah.get('kode_mk', ''),
-                    'mata_kuliah': mata_kuliah.get('name', ''),
-                    'jumlah_pertemuan': mata_kuliah.get('jumlah_pertemuan', 0),
-                    'start_time': mata_kuliah.get('start_time', ''),
-                    'end_time': mata_kuliah.get('end_time', '')
+    data_list = []
+    for jabatan, jadwal_list in jadwal_data.items():
+        if isinstance(jadwal_list, dict):  # <- mencegah error jika bukan dict
+            for id_jadwal, jadwal in jadwal_list.items():
+                data_list.append({
+                    'jabatan': jabatan,
+                    'id_jadwal': jadwal.get('id_jadwal'),
+                    'jam_masuk': jadwal.get('jam_masuk'),
+                    'jam_pulang': jadwal.get('jam_pulang'),
+                    'toleransi_keterlambatan': jadwal.get('toleransi_keterlambatan')
                 })
 
+
     return render_template(
-        'admin_jadwal_mata_kuliah.html',
-        golongan_data=golongan_data,
-        dropdown_golongan=sorted(unique_golongan),
+        'admin_jadwal_kerja.html',
+        data_list=data_list,
         message=message,
         edit_data=edit_data
     )
+
 
 # Admin Mengatur Jadwal Absensi
 @app.route('/set_absensi', methods=['GET', 'POST'])
