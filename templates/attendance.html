@@ -76,87 +76,93 @@
         </ul>
 
         <!-- Content Wrapper -->
-        <div id="content-wrapper" class="d-flex flex-column">
-
-            <!-- Main Content -->
-            <div id="content">
-
-                <!-- Topbar -->
-                <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
-                    <!-- Topbar content here... -->
-                </nav>
-
-                <!-- Begin Page Content -->
-                <div class="container-fluid">
-
-                    <h1 class="h3 mb-4 text-gray-800 text-center">Data Kehadiran Mahasiswa</h1>
-
-                    <!-- Form Pilih Golongan -->
-                    <form method="POST" action="/attendance">
-                        <div class="mb-3">
-                            <label for="jabatan">Pilih Jabatan:</label>
-                            <select name="jabatan" id="jabatan" class="form-control" onchange="this.form.submit()">
-                                <option value="">Pilih Jabatan</option>
-                                {% for jabatan in jabatan_list %}
-                                    <option value="{{ jabatan }}" {% if jabatan == request.form['jabatan'] %} selected {% endif %}>{{ jabatan }}</option>
-                                {% endfor %}
-                            </select>
+        <div class="container-fluid">
+            <h1 class="h3 mb-4 text-gray-800 text-center">Data Kehadiran Karyawan</h1>
+        
+            <!-- Form Filter (Opsional) -->
+            <div class="card mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Filter Data</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form method="POST" class="mb-3">
+                                <label>Jabatan:</label>
+                                <select name="jabatan" class="form-control" onchange="this.form.submit()">
+                                    <option value="">Semua Jabatan</option>
+                                    {% for jabatan in jabatan_list %}
+                                        <option value="{{ jabatan }}" {% if jabatan == jabatan %}selected{% endif %}>{{ jabatan }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
                         </div>
-                    </form>
-                    
-                    {% if jabatan %}
-                    <!-- Form untuk memilih mata kuliah -->
-                    <form method="POST" action="/attendance">
-                        <input type="hidden" name="jabatan" value="{{ jabatan }}">
-                        <div class="mb-3">
-                            <label for="mata_kuliah">Pilih Mata Kuliah:</label>
-                            <select name="mata_kuliah" id="mata_kuliah" class="form-control" onchange="this.form.submit()">
-                                <option value="">Pilih Mata Kuliah</option>
-                                {% for mata_kuliah in mata_kuliah_list %}
-                                    <option value="{{ mata_kuliah }}" {% if mata_kuliah == request.form['mata_kuliah'] %} selected {% endif %}>{{ mata_kuliah }}</option>
-                                {% endfor %}
-                            </select>
+                        <div class="col-md-6">
+                            <form method="POST">
+                                <input type="hidden" name="jabatan" value="{{ jabatan }}">
+                                <label>Jadwal Kerja:</label>
+                                <select name="jadwal_kerja" class="form-control" onchange="this.form.submit()">
+                                    <option value="">Semua Jadwal</option>
+                                    {% for jk in jadwal_kerja_list %}
+                                        <option value="{{ jk }}" {% if jk == jadwal_kerja %}selected{% endif %}>{{ jk }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
                         </div>
-                    </form>
-                    {% endif %}
-
-                    {% if golongan and mata_kuliah %}
-                    <h3 class="mt-4 text-center">Rekap Absensi - Mata Kuliah: {{ mata_kuliah }}</h3>
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <tr>
-                                <th>Kode Mata Kuliah</th>
-                                <th>Nama Mata Kuliah</th>
-                                <th>Minggu Ke</th>
-                                <th>NIM</th>
-                                <th>Nama</th>
-                                <th>Status</th>
-                                <th>Waktu Kehadiran</th>
-                                <th>Bukti Kehadiran</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for attendance in attendance_list %}
+                    </div>
+                </div>
+            </div>
+        
+            <!-- Tabel Absensi -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Daftar Kehadiran</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        {% if attendance_list %}
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
                                 <tr>
-                                    <td>{{ attendance.kode_mata_kuliah }}</td>
-                                    <td>{{ attendance.nama_mata_kuliah }}</td>
-                                    <td>{{ attendance.minggu_ke }}</td>
-                                    <td>{{ attendance.nim }}</td>
-                                    <td>{{ attendance.nama }}</td>
-                                    <td>{{ attendance.status }}</td>
-                                    <td>{{ attendance.timestamp }}</td>
+                                    <th>Kode Jadwal</th>
+                                    <th>Jadwal Kerja</th>
+                                    <th>Minggu</th>
+                                    <th>ID Karyawan</th>
+                                    <th>Nama</th>
+                                    <th>Status</th>
+                                    <th>Waktu</th>
+                                    <th>Bukti</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for a in attendance_list %}
+                                <tr>
+                                    <td>{{ a.kode_jadwal_kerja }}</td>
+                                    <td>{{ a.jadwal_kerja }}</td>
+                                    <td>{{ a.minggu_ke }}</td>
+                                    <td>{{ a.id_karyawan }}</td>
+                                    <td>{{ a.nama }}</td>
                                     <td>
-                                        {% if attendance.image_url %}
-                                            <img src="{{ attendance.image_url }}" alt="Bukti Kehadiran" width="50" height="50">
+                                        <span class="badge {% if a.status == 'Hadir' %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ a.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ a.timestamp if a.timestamp != '-' else '-' }}</td>
+                                    <td class="text-center">
+                                        {% if a.image_url %}
+                                        <img src="{{ a.image_url }}" width="50" class="img-thumbnail">
                                         {% else %}
-                                            Tidak Ada
+                                        -
                                         {% endif %}
                                     </td>
                                 </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="alert alert-info">Tidak ada data kehadiran</div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
