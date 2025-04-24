@@ -26,6 +26,12 @@ dataset_path = 'DataSet'
 
 
 # Inisialisasi Firebase
+# Inisialisasi Firebase
+cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+initialize_app(cred, {
+    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+})
+bucket = storage.bucket('facerecognition-c8264.appspot.com')
 
 # Load model hasil fine-tuning
 model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
@@ -263,46 +269,53 @@ def video_feed(user_id, mata_kuliah, minggu_ke, nim):
     )
 
 
+def generate_new_employee_id():
+    employees_ref = db.reference('employees')
+    all_employees = employees_ref.get() or {}
 
+    nums = []
+    for emp in all_employees.values():
+        emp_id = emp.get('id', '')
+        if emp_id.startswith('KRY-') and emp_id.split('-')[-1].isdigit():
+            nums.append(int(emp_id.split('-')[-1]))
+
+    new_num = max(nums) + 1 if nums else 1
+    return f'KRY-{new_num:02d}'
+
+
+@app.route('/api/get-last-id', methods=['GET'])
+def get_last_id():
+    try:
+        new_id = generate_new_employee_id()
+        return jsonify({'employee_id': new_id})   # KEY HARUS employee_id
+    except Exception as e:
+        # log error lengkap ke console
+        app.logger.exception(e)
+        return jsonify({'error': str(e)}), 500
 
 
 # Memanmbahkan Dataset
 # Memanmbahkan Dataset 
+# Tambah route dataset
 @app.route('/dataset', methods=['GET', 'POST'])
 def dataset():
-    """
-    Route untuk menambahkan dataset karyawan.
-    """
     if request.method == 'GET':
-        karyawan = {
-            'nama': 'John Doe',
-            'id_karyawan': '123',
-            'jabatan': 'Manager',
-            
-        }
-        return render_template('dataset.html', karyawan=karyawan)
+        return render_template('dataset.html')
 
     elif request.method == 'POST':
         try:
             # Ambil data dari form
-            name = request.form.get('name')  # Nama karyawan
-            id_karyawan = request.form.get('id_karyawan')  # ID karyawan
-            jabatan = request.form.get('jabatan')  # Jabatan karyawan
-           
+            name = request.form.get('name')
+            jabatan = request.form.get('jabatan')
 
-            # Validasi ID karyawan (harus berupa angka/huruf)
-            if not id_karyawan or not id_karyawan.isalnum():
-                return jsonify({'status': 'error', 'message': 'ID Karyawan harus berupa huruf atau angka tanpa karakter khusus!'}), 400
+            if not all([name, jabatan]):
+                return jsonify({'status': 'error', 'message': 'Nama dan Jabatan harus diisi!'}), 400
 
-            # Buat employee_id dengan format "Karyawan-{id_karyawan}"
-            employee_id = f'Karyawan-{id_karyawan}'
+            # Generate ID baru
+            employee_id = generate_new_employee_id()
 
-            # Validasi input
-            if not all([name, id_karyawan, jabatan]):
-                return jsonify({'status': 'error', 'message': 'Nama, ID Karyawan, dan Jabatan harus diisi!'}), 400
-
-            # Buat folder penyimpanan dengan format "<ID>-<Nama>"
-            folder_name = f"{employee_id}-{name.replace(' ', '_')}"  # Replace spasi dengan underscore
+            # Siapkan folder lokal untuk menyimpan dataset
+            folder_name = f"{employee_id}-{name.replace(' ', '_')}"
             folder_path = os.path.join(dataset_path, folder_name)
             os.makedirs(folder_path, exist_ok=True)
 
@@ -310,68 +323,47 @@ def dataset():
             images = [request.form.get(key) for key in request.form if key.startswith('image_')]
             if not images:
                 return jsonify({'status': 'error', 'message': 'Tidak ada gambar yang diterima!'}), 400
-
             def process_and_crop_faces(image, file_name_prefix, save_folder, user_id, user_name, start_count=0, padding=0.2):
                 """
-                Fungsi untuk memproses dan memotong wajah dari gambar, lalu mengubah ukurannya menjadi 224x224.
+                Proses wajah: crop, resize, dan simpan lokal + Firebase Storage.
                 """
-                # Konversi gambar ke YUV dan histogram equalization
                 img_yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
                 img_yuv[:, :, 0] = cv2.equalizeHist(img_yuv[:, :, 0])
                 image = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2BGR)
-
-                # Terapkan median filter untuk mengurangi noise
                 image = cv2.medianBlur(image, 5)
 
-                # Deteksi wajah
-                faces = face_cascade.detectMultiScale(
-                    image, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30)
-                )
+                faces = face_cascade.detectMultiScale(image, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30))
                 count = start_count
 
                 for (x, y, w, h) in faces:
-                    # Tambahkan padding
-                    x_pad = int(padding * w)
-                    y_pad = int(padding * h)
-                    x_start = max(0, x - x_pad)
-                    y_start = max(0, y - y_pad)
-                    x_end = min(image.shape[1], x + w + x_pad)
-                    y_end = min(image.shape[0], y + h + y_pad)
+                    x_pad, y_pad = int(padding * w), int(padding * h)
+                    x_start, y_start = max(0, x - x_pad), max(0, y - y_pad)
+                    x_end, y_end = min(image.shape[1], x + w + x_pad), min(image.shape[0], y + h + y_pad)
 
-                    # Crop wajah
                     cropped_face = image[y_start:y_end, x_start:x_end]
-
-                    # Resize wajah ke ukuran 224x224
                     resized_face = cv2.resize(cropped_face, (224, 224), interpolation=cv2.INTER_AREA)
 
-                    # Simpan secara lokal
                     file_name = f"{file_name_prefix}.{count}.jpg"
                     local_path = os.path.join(save_folder, file_name)
                     cv2.imwrite(local_path, resized_face)
 
-                    # Upload ke Firebase Storage
                     blob = bucket.blob(f'images/{user_id}_{user_name}/{file_name}')
                     blob.upload_from_filename(local_path)
-                    blob.make_public()  # URL publik
-                    image_url = blob.public_url
-
+                    blob.make_public()
                     count += 1
 
                 return count
 
-            # Proses setiap gambar yang diterima
             total_faces_saved = 0
             for idx, image_data in enumerate(images):
                 try:
-                    # Decode gambar dari base64
-                    image_data = image_data.split(",")[1]  # Hapus prefix
+                    image_data = image_data.split(",")[1]
                     img_array = np.frombuffer(base64.b64decode(image_data), np.uint8)
                     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
                     if img is None:
                         return jsonify({'status': 'error', 'message': f'Gambar ke-{idx + 1} tidak valid!'}), 400
 
-                    # Proses wajah dan simpan ke folder
                     total_faces_saved = process_and_crop_faces(
                         image=img,
                         file_name_prefix=employee_id,
@@ -386,29 +378,27 @@ def dataset():
             if total_faces_saved == 0:
                 return jsonify({'status': 'error', 'message': 'Tidak ada wajah yang berhasil disimpan!'}), 400
 
-            # Simpan data karyawan ke Firebase
-            # Simpan data karyawan ke Firebase, termasuk jumlah gambar
-            employee_ref = db.reference(f'employees/{employee_id}')
+            # Simpan metadata ke Firebase
             images_count = len([f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
-            print(f"[DEBUG] Jumlah gambar yang disimpan: {images_count}")
-
+            employee_ref = db.reference(f'employees/{employee_id}')
             employee_ref.set({
-                'id': employee_id,      # ID dengan format "Karyawan-{id_karyawan}"
-                'name': name,           # Nama karyawan
-                'id_karyawan': id_karyawan,  # ID Karyawan hanya angka/huruf
-                'jabatan': jabatan,     # Jabatan karyawan
+                'id': employee_id,
+                'name': name,
+                'id_karyawan': employee_id.split('-')[-1],  # hanya nomor belakang
+                'jabatan': jabatan,
                 'images_count': images_count,
                 'timestamp': datetime.now().isoformat()
-                })
-            print(f"[DEBUG] Metadata karyawan diperbarui di Firebase: {employee_id}")
+            })
+
             return jsonify({
                 'status': 'success',
-                'message': f'Dataset berhasil disimpan. Total wajah yang disimpan: {total_faces_saved}',
+                'message': f'Dataset berhasil disimpan. Total wajah: {total_faces_saved}',
                 'employee_id': employee_id
             })
 
         except Exception as e:
             return jsonify({'status': 'error', 'message': f'Terjadi kesalahan: {str(e)}'}), 500
+
 
 # Fungsi untuk mengunggah file dan mencatat metadata
 def upload_dataset_to_firebase():

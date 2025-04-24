@@ -1,293 +1,182 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tambah Dataset Mahasiswa</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tambah Dataset Karyawan</title>
 
-    <!-- Custom fonts for this template -->
-    <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
-
-    <!-- Custom styles for this template -->
-    <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
-    <link href="/static/css/styles.css" rel="stylesheet">
+  <!-- STYLES -->
+  <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
+  <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
+  <link href="/static/css/styles.css" rel="stylesheet">
 </head>
 
-<body id="page-top" onload="startCamera(); generateStudentID();">
+<body id="page-top" onload="startCamera(); getLastEmployeeId();">
 
-    <!-- Page Wrapper -->
-    <div id="wrapper">
+  <!-- Page Wrapper -->
+  <div id="wrapper">
 
-        <!-- Sidebar -->
-        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+    <!-- ===== SIDEBAR ===== -->
+    <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
 
-            <!-- Sidebar - Brand -->
-            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
-                <div class="sidebar-brand-icon rotate-n-15">
-                    <i class="fas fa-laugh-wink"></i>
-                </div>
-                <div class="sidebar-brand-text mx-3">Admin Dashboard</div>
-            </a>
+      <!-- Brand -->
+      <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
+        <div class="sidebar-brand-icon rotate-n-15"><i class="fas fa-laugh-wink"></i></div>
+        <div class="sidebar-brand-text mx-3">Admin Dashboard</div>
+      </a>
 
-            <!-- Divider -->
-            <hr class="sidebar-divider">
+      <hr class="sidebar-divider my-0">
 
-            <!-- Sidebar Links -->
-            <li class="nav-item">
-                <a class="nav-link" href="/dashboard">
-                    <i class="fas fa-tachometer-alt"></i>
-                    <span>Dashboard</span>
-                </a>
+      <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a></li>
+      <li class="nav-item active"><a class="nav-link" href="/dataset"><i class="fas fa-database"></i><span>Tambah Dataset</span></a></li>
+      <li class="nav-item"><a class="nav-link" href="/train"><i class="fas fa-brain"></i><span>Training Model</span></a></li>
+      <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-list"></i><span>Karyawan Attendance</span></a></li>
+      <li class="nav-item"><a class="nav-link" href="/admin/jadwal_kerja"><i class="fas fa-calendar"></i><span>Jadwal Kerja</span></a></li>
+      <li class="nav-item"><a class="nav-link logout" href="/logout"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a></li>
+
+      <hr class="sidebar-divider d-none d-md-block">
+      <div class="text-center d-none d-md-inline">
+      </div>
+    </ul>
+    <!-- ===== END SIDEBAR ===== -->
+
+    <!-- Content Wrapper -->
+    <div id="content-wrapper" class="d-flex flex-column">
+
+      <!-- Main Content -->
+      <div id="content">
+
+        <!-- ===== TOPBAR ===== -->
+        <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 shadow">
+          <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
+            <i class="fa fa-bars"></i>
+          </button>
+
+          <ul class="navbar-nav ml-auto">
+            <li class="nav-item dropdown no-arrow">
+              <a class="nav-link dropdown-toggle" href="#" id="userDropdown">
+                <span class="mr-2 d-none d-lg-inline text-gray-600 small">Admin</span>
+                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg">
+              </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/dataset">
-                    <i class="fas fa-database"></i>
-                    <span>Tambah Dataset</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/train">
-                    <i class="fas fa-brain"></i>
-                    <span>Training Model</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/attendance">
-                    <i class="fas fa-list"></i>
-                    <span>Karyawan Attendance</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/admin/jadwal_kerja">
-                    <i class="fas fa-calendar"></i>
-                    <span>Jadwal Kerja</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link logout" href="/logout">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </a>
-            </li>
+          </ul>
+        </nav>
+        <!-- ===== END TOPBAR ===== -->
 
-        </ul>
-        <!-- End of Sidebar -->
+        <!-- ===== PAGE CONTENT ===== -->
+        <div class="container-fluid">
 
-        <!-- Content Wrapper -->
-        <div id="content-wrapper" class="d-flex flex-column">
+          <h3 class="text-primary font-weight-bold mb-4">Form Tambah Dataset</h3>
 
-            <!-- Main Content -->
-            <div id="content">
-
-                <!-- Topbar -->
-                <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
-                    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
-                        <i class="fa fa-bars"></i>
-                    </button>
-
-                    <!-- Topbar Navbar -->
-                    <ul class="navbar-nav ml-auto">
-                        <li class="nav-item dropdown no-arrow">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown">
-                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">Admin</span>
-                                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg">
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
-                <!-- End of Topbar -->
-
-                <!-- Begin Page Content -->
-                <div class="container-fluid">
-
-                    <!-- Page Heading -->
-                    <h1 class="h3 mb-4 text-gray-800">Tambah Dataset Karyawan</h1>
-
-                    <!-- Content Row -->
-                    <div class="row">
-                        <div class="col-lg-8">
-
-                            <!-- Tambah Dataset Form -->
-                            <div class="card shadow mb-4">
-                                <div class="card-header py-3">
-                                    <h6 class="m-0 font-weight-bold text-primary">Form Tambah Dataset</h6>
-                                </div>
-                                <div class="card-body">
-                                    <form id="dataset-form">
-                                        <div class="form-group">
-                                            <label for="name">Nama Karyawan:</label>
-                                            <input type="text" class="form-control" id="name" name="name" placeholder="Masukkan nama" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="id_karyawan">ID Karyawan:</label>
-                                            <input type="text" class="form-control" id="id_karyawan" name="id_karyawan" placeholder="Masukkan Id Karyawan" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="jabatan">Jabatan:</label>
-                                            <input type="text" class="form-control" id="jabatan" name="jabatan" placeholder="Masukkan Jabatan" required>
-                                        </div>
-                                        
-
-                                        <!-- Kamera -->
-                                        <div class="form-group text-center">
-                                            <video id="video" width="320" height="240" autoplay class="mb-3"></video>
-                                            <br>
-                                            <button type="button" class="btn btn-primary" onclick="captureImages()">Mulai Pengambilan Gambar</button>
-                                        </div>
-
-                                        <!-- Status -->
-                                        <p id="status-text" class="text-center text-success font-weight-bold"></p>
-
-                                        <!-- Tombol Kembali -->
-                                        <button id="return-button" type="button" class="btn btn-secondary d-none"
-                                            onclick="window.location.href='/dashboard';">Kembali ke Dashboard</button>
-                                    </form>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                </div>
-                <!-- /.container-fluid -->
-
+          <form id="dataset-form" onsubmit="return false;">
+            <!-- ID -->
+            <div class="form-group">
+              <label for="employee_id">ID Karyawan:</label>
+              <input type="text" class="form-control" id="employee_id" name="employee_id" readonly>
             </div>
-            <!-- End of Main Content -->
 
-            <!-- Footer -->
-            <footer class="sticky-footer bg-white">
-                <div class="container my-auto">
-                    <div class="copyright text-center my-auto">
-                        <span>Copyright &copy; Your Website 2024</span>
-                    </div>
-                </div>
-            </footer>
-            <!-- End of Footer -->
+            <!-- Nama -->
+            <div class="form-group">
+              <label for="name">Nama Karyawan:</label>
+              <input type="text" class="form-control" id="name" name="name" placeholder="Masukkan nama" required>
+            </div>
 
+            <!-- Jabatan -->
+            <div class="form-group">
+              <label for="jabatan">Jabatan:</label>
+              <input type="text" class="form-control" id="jabatan" name="jabatan" placeholder="Masukkan jabatan" required>
+            </div>
+
+            <!-- Kamera -->
+            <div class="form-group text-center">
+              <video id="video" width="320" height="240" autoplay class="mb-3 border"></video><br>
+              <button type="button" class="btn btn-primary" onclick="captureImages()">Mulai Pengambilan Gambar</button>
+            </div>
+
+            <p id="status-text" class="text-center text-success font-weight-bold"></p>
+          </form>
+
+        </div><!-- /.container-fluid -->
+        <!-- ===== END PAGE CONTENT ===== -->
+
+      </div><!-- /#content -->
+
+      <!-- Footer -->
+      <footer class="sticky-footer bg-white">
+        <div class="container my-auto">
+          <div class="copyright text-center my-auto">
+            <span>&copy; 2025 Your Company</span>
+          </div>
         </div>
-        <!-- End of Content Wrapper -->
+      </footer>
 
-    </div>
-    <!-- End of Page Wrapper -->
+    </div><!-- /#content-wrapper -->
+  </div><!-- /#wrapper -->
 
-    <!-- Bootstrap core JavaScript -->
-    <script src="/static/vendor/jquery/jquery.min.js"></script>
-    <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <!-- SB‑Admin scripts -->
+  <script src="/static/vendor/jquery/jquery.min.js"></script>
+  <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/vendor/jquery-easing/jquery.easing.min.js"></script>
+  <script src="/static/js/sb-admin-2.min.js"></script>
 
-    <!-- Core plugin JavaScript -->
-    <script src="/static/vendor/jquery-easing/jquery.easing.min.js"></script>
+  <!-- ========= CUSTOM SCRIPT ========= -->
+  <script>
+    /* GLOBAL */
+    let captureCount = 0, stream = null, maxImages = 10;
 
-    <!-- Custom scripts for all pages -->
-    <script src="/static/js/sb-admin-2.min.js"></script>
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById('video').srcObject = stream;
+      } catch (e) {
+        alert('Tidak dapat mengakses kamera.'); console.error(e);
+      }
+    }
 
-    <!-- Custom Script -->
-    <script>
-        let captureCount = 0;
-        let stream = null;
-        const maxImages = 10;
+    function stopCamera() { if (stream) stream.getTracks().forEach(t=>t.stop()); }
 
-        function startCamera() {
-            const video = document.getElementById('video');
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(cameraStream => {
-                    stream = cameraStream;
-                    video.srcObject = stream;
-                    video.play();
-                })
-                .catch(err => {
-                    console.error("Error accessing camera: ", err);
-                    alert("Tidak dapat mengakses kamera. Periksa pengaturan perangkat Anda.");
-                });
+    function getLastEmployeeId(){
+      fetch('/api/get-last-id')
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.error) throw d.error;
+          document.getElementById('employee_id').value = d.employee_id;
+        })
+        .catch(e=>{ alert('Gagal mengambil ID karyawan otomatis.'); console.error(e); });
+    }
+
+    function captureImages(){
+      const name = document.getElementById('name').value.trim(),
+            jabatan = document.getElementById('jabatan').value.trim(),
+            idKaryawan = document.getElementById('employee_id').value.trim(),
+            statusText = document.getElementById('status-text'),
+            video = document.getElementById('video');
+
+      if(!name||!jabatan){ alert('Nama dan jabatan wajib diisi.'); return; }
+
+      const canvas=document.createElement('canvas'); canvas.width=640; canvas.height=480;
+      const ctx=canvas.getContext('2d'), formData=new FormData();
+      formData.append('employee_id', idKaryawan); formData.append('name', name); formData.append('jabatan', jabatan);
+
+      function loop(){
+        if(captureCount>=maxImages){
+          statusText.textContent='Mengirim data ke server...'; stopCamera();
+          fetch('/dataset',{method:'POST',body:formData})
+            .then(r=>r.json())
+            .then(d=>{
+              if(d.status==='success'){ alert(d.message); location.href='/dashboard'; }
+              else alert('Error: '+d.message);
+            }).catch(e=>alert('Network error: '+e.message));
+          return;
         }
-
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-        }
-
-        function captureImages() {
-            const video = document.getElementById('video');
-            const canvas = document.createElement('canvas');
-            const statusText = document.getElementById('status-text');
-            const returnButton = document.getElementById('return-button');
-            canvas.width = 640;
-            canvas.height = 480;
-            const ctx = canvas.getContext('2d');
-            captureCount = 0;
-
-            const name = document.getElementById('name').value;
-            const id_karyawan = document.getElementById('id_karyawan').value;
-            const jabatan = document.getElementById('jabatan').value;
-
-            // Validasi input
-            if (!name || !id_karyawan || !jabatan) {
-                alert("Semua field harus diisi sebelum memulai pengambilan gambar!");
-                return;
-            }
-
-            if (!stream) {
-                alert("Kamera belum aktif. Harap mulai kamera terlebih dahulu.");
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('name', name);
-            formData.append('id_karyawan', id_karyawan);
-            formData.append('jabatan', jabatan);
-
-            statusText.innerText = "Sedang mengambil dataset, harap tunggu...";
-            returnButton.style.display = "none";
-
-            function captureAndSendImage() {
-                if (captureCount >= maxImages) {
-                    alert(`Pengambilan ${maxImages} gambar selesai.`);
-                    statusText.innerText = "Proses selesai. Anda akan diarahkan ke dashboard.";
-                    stopCamera();
-
-                    fetch('/dataset', {
-                        method: 'POST',
-                        body: formData
-                    })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                alert(data.message);
-                                window.location.href = '/dashboard';
-                            } else {
-                                alert("Terjadi kesalahan saat mengirim data: " + data.message);
-                                returnButton.style.display = "block";
-                            }
-                        })
-                        .catch(err => {
-                            alert("Terjadi kesalahan jaringan: " + err.message);
-                            returnButton.style.display = "block";
-                        });
-
-                    return;
-                }
-
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = canvas.toDataURL('image/jpeg', 0.5);
-                formData.append(`image_${captureCount + 1}`, imageData);
-
-                captureCount++;
-                statusText.innerText = `Mengambil gambar ${captureCount}/${maxImages}...`;
-                setTimeout(captureAndSendImage, 500);
-            }
-
-            captureAndSendImage();
-        }
-
-        // Mulai kamera saat halaman dimuat
-        window.onload = function() {
-            startCamera();
-        };
-
-    </script>
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        formData.append(`image_${captureCount+1}`, canvas.toDataURL('image/jpeg',0.5));
+        captureCount++; statusText.textContent=`Mengambil gambar ${captureCount}/${maxImages}...`;
+        setTimeout(loop,500);
+      }
+      loop();
+    }
+  </script>
 </body>
-
 </html>
