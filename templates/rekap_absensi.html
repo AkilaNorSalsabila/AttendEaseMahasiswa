@@ -27,7 +27,7 @@
                 <div class="sidebar-brand-icon rotate-n-15">
                     <i class="fas fa-laugh-wink"></i>
                 </div>
-                <div class="sidebar-brand-text mx-3">Mahasiswa Dashboard</div>
+                <div class="sidebar-brand-text mx-3">Karyawan Dashboard</div>
             </a>
 
             <!-- Divider -->
@@ -35,7 +35,7 @@
 
             <!-- Sidebar Links -->
             <li class="nav-item">
-                <a class="nav-link" href="/mahasiswa_dashboard">
+                <a class="nav-link" href="/karyawan_dashboard">
                     <i class="fas fa-home"></i>
                     <span>Dashboard</span>
                 </a>
@@ -76,7 +76,7 @@
                     <ul class="navbar-nav ml-auto">
                         <li class="nav-item dropdown no-arrow">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown">
-                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ mahasiswa.name }}</span>
+                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ karyawan.name }}</span>
                                 <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg">
                             </a>
                         </li>
@@ -96,9 +96,9 @@
 
                     <!-- Informasi Mahasiswa -->
                     <h1 class="h3 mb-4 text-gray-800 text-center">Rekap Kehadiran</h1>
-                    <p><strong>Nama:</strong> {{ mahasiswa.name }}</p>
-                    <p><strong>NIM:</strong> {{ mahasiswa.nim }}</p>
-                    <p><strong>Golongan:</strong> {{ mahasiswa.golongan }}</p>
+                    <p><strong>Nama:</strong> {{ karyawan.name }}</p>
+                    <p><strong>ID:</strong> {{ karyawan.id }}</p>
+                    <p><strong>Jabatan:</strong> {{ karyawan.jabatan }}</p>
 
                     <!-- Daftar Kehadiran -->
                     <div class="card shadow mb-4">

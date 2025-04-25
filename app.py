@@ -104,9 +104,36 @@ def karyawan_dashboard():
     if 'karyawan' not in session:
         flash('Silakan login terlebih dahulu', 'warning')
         return redirect('/login_karyawan')
-    
-    karyawan = session['karyawan']
-    return render_template('karyawan_dashboard.html', karyawan=karyawan)
+
+    karyawan = session['karyawan']  # Data karyawan
+    jabatan = karyawan.get('jabatan', '')  # Mengambil jabatan dari session
+
+    # Ambil daftar jadwal kerja berdasarkan jabatan
+    jadwal_kerja_data = []
+    jadwal_ref = db.reference(f'jadwal_kerja/{jabatan}')
+    jadwal_data = jadwal_ref.get()
+
+    # Menambahkan log untuk debugging
+    print(f"[DEBUG] Data jadwal kerja yang diterima: {jadwal_data}")
+
+    # Pastikan jadwal_data memiliki data dan proses dengan aman
+    if isinstance(jadwal_data, dict):  # Memastikan bahwa jadwal_data adalah dictionary
+        for k, v in jadwal_data.items():
+            if isinstance(v, dict):  # Memastikan v adalah dictionary
+                jadwal_kerja_data.append({
+                    'id': k,
+                    'name': v.get('name', 'Tidak Ada Nama'),
+                    'jam_masuk': v.get('jam_masuk', 'Tidak Diketahui'),
+                    'jam_pulang': v.get('jam_pulang', 'Tidak Diketahui'),
+                    'status': v.get('status', 'Tidak Hadir')  # Menambahkan status jika ada
+                })
+            else:
+                print(f"[WARNING] Data jadwal kerja tidak dalam format yang diharapkan: {v}")
+    else:
+        print("[ERROR] Data jadwal kerja kosong atau tidak dalam format yang benar.")
+
+    # Kirim data karyawan dan jadwal_kerja_data ke template
+    return render_template('karyawan_dashboard.html', karyawan=karyawan, jadwal_kerja_data=jadwal_kerja_data)
 
 #Register Admin
 @app.route('/register', methods=['GET', 'POST'])
@@ -134,6 +161,7 @@ def register():
             return render_template('register.html', message=f"Terjadi kesalahan: {str(e)}")
 
     return render_template('register.html')
+
 
 # Halaman Dashboard Admin
 @app.route('/dashboard')
@@ -262,11 +290,11 @@ def gen(user_id, mata_kuliah, minggu_ke, nim):
         print("[INFO] Kamera ditutup dan jendela video dihentikan.")
 
 
-@app.route('/video_feed/<user_id>/<mata_kuliah>/<minggu_ke>/<nim>')
-def video_feed(user_id, mata_kuliah, minggu_ke, nim):
-    print(f"[DEBUG] Video feed accessed for user_id={user_id}, mata_kuliah={mata_kuliah}, minggu_ke={minggu_ke}, nim={nim}")
+@app.route('/video_feed/<user_id>/<jadwal_kerja>/<minggu_ke>/<id>')
+def video_feed(user_id, jadwal_kerja, minggu_ke,id):
+    print(f"[DEBUG] Video feed accessed for user_id={user_id}, jadwal_kerja={jadwal_kerja}, minggu_ke={minggu_ke}, id={id}")
     return Response(
-        gen(user_id, mata_kuliah, minggu_ke, nim),
+        gen(user_id, jadwal_kerja, minggu_ke, id),
         mimetype='multipart/x-mixed-replace; boundary=frame'
     )
 
@@ -1007,68 +1035,46 @@ def set_absensi():
             return render_template('set_absensi.html', message=f"Terjadi kesalahan: {str(e)}")
 
     return render_template('set_absensi.html', message=None)
-
+    
 @app.route('/absen', methods=['GET', 'POST'])
 def absen():
-    if 'mahasiswa' not in session:
-        return redirect('/login_mahasiswa')
+    if 'karyawan' not in session:
+        flash('Silakan login terlebih dahulu', 'warning')
+        return redirect('/login_karyawan')
 
-    mahasiswa = session['mahasiswa']  # Data mahasiswa
-    golongan = mahasiswa.get('golongan', '')  # Mengambil golongan dari session
+    karyawan = session['karyawan']
+    jabatan = karyawan.get('jabatan', '')
 
-    # Menambahkan log untuk debugging
-    print(f"Golongan yang ada di session: {golongan}")
-
-    # Ambil daftar mata kuliah berdasarkan golongan
-    mata_kuliah_data = []
-    jadwal_ref = db.reference(f'jadwal_mata_kuliah/{golongan}')
+    jadwal_kerja_data = []
+    jadwal_ref = db.reference(f'jadwal_kerja/{jabatan}')
     jadwal_data = jadwal_ref.get()
 
     if jadwal_data:
-        mata_kuliah_data = [{'kode': k, 'name': v['name']} for k, v in jadwal_data.items()]
-
-    if request.method == 'POST':
-        # Ambil data dari form
-        mata_kuliah = request.form.get('mata_kuliah')  # Kode mata kuliah
-        minggu_ke = request.form.get('minggu_ke')  # Minggu ke berapa
-        student_id = f"ID-{mahasiswa['nim']}"  # ID mahasiswa
-
-        # Validasi input
-        if not mata_kuliah or not minggu_ke:
-            return jsonify({'status': 'error', 'message': 'Pilih mata kuliah dan minggu ke terlebih dahulu!'})
-
-        # Cek validitas mata kuliah
-        mata_kuliah_name = next((mk['name'] for mk in mata_kuliah_data if mk['kode'] == mata_kuliah), None)
-        if not mata_kuliah_name:
-            return jsonify({'status': 'error', 'message': 'Mata kuliah tidak valid!'})
-
-        try:
-            # Simpan data absensi ke Firebase
-            attendance_ref = db.reference(f"attendance/{mata_kuliah}/{minggu_ke}/{student_id}")
-            attendance_data = {
-                "nim": mahasiswa['nim'],  # NIM mahasiswa
-                "name": mahasiswa['name'],  # Nama mahasiswa
-                "mata_kuliah": mata_kuliah_name,  # Nama mata kuliah
-                "kode_mata_kuliah": mata_kuliah,  # Kode mata kuliah
-                "status": "Hadir",
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "image_url": "https://path-to-image.jpg",  # Ganti dengan URL gambar yang sebenarnya
-                "golongan": golongan  # Menambahkan golongan ke data absensi
+        for k, v in jadwal_data.items():
+            jadwal_kerja = {
+                'id': k,
+                'name': v.get('name', 'Tidak Ada Nama'),
+                'jam_masuk': v.get('jam_masuk', ''),
+                'jam_pulang': v.get('jam_pulang', ''),
+                'status': v.get('status', 'Tidak Hadir'),
+                'is_terlambat': False
             }
+            
+            # Periksa apakah waktu absensi sudah lewat
+            jam_masuk = jadwal_kerja['jam_masuk']
+            if jam_masuk:
+                jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M')
+                now = datetime.now()
 
-            # Menambahkan log untuk debugging
-            print(f"Data absensi yang dikirim: {attendance_data}")
+                if now > jam_masuk_time and now - jam_masuk_time > timedelta(minutes=15):
+                    jadwal_kerja['is_terlambat'] = True
+                else:
+                    jadwal_kerja['is_terlambat'] = False
 
-            attendance_ref.set(attendance_data)
+            jadwal_kerja_data.append(jadwal_kerja)
 
-            # Berikan respons sukses ke frontend
-            return jsonify({'status': 'success', 'kode_mata_kuliah': mata_kuliah, 'nama_mata_kuliah': mata_kuliah_name, 'minggu_ke': minggu_ke, 'status': "Hadir", 'message': 'Absensi berhasil disimpan!'})
-        except Exception as e:
-            print(f"[ERROR] Gagal menyimpan absensi: {e}")
-            return jsonify({'status': 'error', 'message': 'Terjadi kesalahan saat menyimpan absensi.'})
+    return render_template('absen.html', karyawan=karyawan, jadwal_kerja_data=jadwal_kerja_data)
 
-    # Jika metode GET, kirim data awal untuk ditampilkan di form
-    return render_template('absen.html', mahasiswa=mahasiswa, mata_kuliah_data=mata_kuliah_data)
 
 def run_face_recognition(user_id):
     """
@@ -1239,19 +1245,19 @@ def rekap_absensi():
 def check_absen_status():
     # Mendapatkan parameter dari URL
     user_id = request.args.get('user_id')
-    mata_kuliah = request.args.get('mata_kuliah')  # Harus berupa kode asli
+    jadwal_kerja = request.args.get('jadwal_kerja')  # Harus berupa kode asli
     minggu_ke = request.args.get('minggu_ke')
 
     # Validasi parameter
-    if not user_id or not mata_kuliah or not minggu_ke:
-        print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id', 'mata_kuliah', dan 'minggu_ke' disertakan.")
+    if not user_id or not jadwal_kerja or not minggu_ke:
+        print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id', 'jadwal_kerja', dan 'minggu_ke' disertakan.")
         return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
 
-    print(f"[DEBUG] Checking attendance for user_id={user_id}, mata_kuliah={mata_kuliah}, minggu_ke={minggu_ke}")
+    print(f"[DEBUG] Checking attendance for user_id={user_id}, mata_kuliah={jadwal_kerja}, minggu_ke={minggu_ke}")
 
     try:
         # Referensi ke lokasi data absensi di Firebase Realtime Database
-        attendance_ref = db.reference(f"attendance/{mata_kuliah}/{minggu_ke}/{user_id}")
+        attendance_ref = db.reference(f"attendance/{jadwal_kerja}/{minggu_ke}/{user_id}")
         data = attendance_ref.get()
 
         if data:
