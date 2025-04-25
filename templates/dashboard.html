@@ -14,12 +14,12 @@
     <link href="/static/css/sb-admin-2.min.css?v={{ timestamp }}" rel="stylesheet">
 
     <script>
-        function loadStudents() {
+        function loadEmployees() {
             const loader = `<tr><td colspan="5" style="text-align: center;">Memuat data...</td></tr>`;
-            const tableBody = document.getElementById('students-table-body');
+            const tableBody = document.getElementById('employees-table-body');
             tableBody.innerHTML = loader;
 
-            fetch('/students')
+            fetch('/employees')
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -28,17 +28,17 @@
                         if (data.data.length === 0) {
                             tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Tidak ada data karyawan.</td></tr>`;
                         } else {
-                            data.data.forEach(student => {
+                            data.data.forEach(employee => {
                                 const row = `
                                     <tr>
-                                        <td>${student.id}</td>
-                                        <td>${student.name}</td>
-                                        <td>${student.images_count}</td>
-                                        <td>${student.jabatan !== '-' ? student.jabatan : student.semester}</td>
-
+                                        <td>${employee.id}</td>
+                                        <td>${employee.name}</td>
+                                        <td>${employee.images_count}</td>
+                                        <td>${employee.jabatan !== '-' ? employee.jabatan : employee.semester}</td>
                                         <td>
-                                            <button class="btn btn-warning btn-sm" onclick="editStudent('${student.id}', '${student.name}', '${student.semester}', '${student.golongan}')">Edit</button>
-                                            <button class="btn btn-danger btn-sm" onclick="deleteStudent('${student.id}')">Hapus</button>
+                                            <button class="btn btn-warning btn-sm" onclick="editEmployee('${employee.id}', '${employee.name}', '${employee.jabatan}')">Edit</button>
+
+                                            <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${employee.id}')">Hapus</button>
                                         </td>
                                     </tr>`;
                                 tableBody.innerHTML += row;
@@ -55,45 +55,46 @@
                 });
         }
 
-        function editStudent(studentId, currentName, currentSemester, currentGolongan) {
-            const newGolongan = prompt('Masukkan golongan baru:', currentGolongan);
-            const newSemester = prompt('Masukkan semester baru:', currentSemester);
+        function editEmployee(employeeId, currentName, currentJabatan) {
+            const newName = prompt('Masukkan nama baru:', currentName);
+            const newJabatan = prompt('Masukkan jabatan baru:', currentJabatan);
 
-            if (newGolongan && newSemester) {
-                fetch(`/students/edit/${studentId}`, {
+            if (newName && newJabatan) {
+                fetch(`/employees/edit/${employeeId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        golongan: newGolongan,
-                        semester: newSemester
+                        name: newName,
+                        jabatan: newJabatan
                     })
                 })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert(data.message);
-                            loadStudents();
-                        } else {
-                            alert(`Gagal mengedit karyawan: ${data.message}`);
-                        }
-                    })
-                    .catch(err => {
-                        console.error("Error saat mengedit karyawan:", err.message);
-                        alert('Terjadi kesalahan saat mengedit data karyawan.');
-                    });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert(data.message);
+                        loadEmployees();
+                    } else {
+                        alert(`Gagal mengedit karyawan: ${data.message}`);
+                    }
+                })
+                .catch(err => {
+                    console.error("Error saat mengedit karyawan:", err.message);
+                    alert('Terjadi kesalahan saat mengedit data karyawan.');
+                });
             } else {
-                alert("Golongan dan Semester tidak boleh kosong.");
+                alert("Nama dan jabatan tidak boleh kosong.");
             }
         }
 
-        function deleteStudent(studentId) {
+
+        function deleteEmployee(employeeId) {
             if (confirm('Yakin ingin menghapus karyawan ini?')) {
-                fetch(`/students/delete/${studentId}`, { method: 'DELETE' })
+                fetch(`/employees/delete/${employeeId}`, { method: 'DELETE' })
                     .then(response => response.json())
                     .then(data => {
                         if (data.status === 'success') {
                             alert(data.message);
-                            loadStudents();
+                            loadEmployees();
                         } else {
                             alert(`Gagal menghapus karyawan: ${data.message}`);
                         }
@@ -105,7 +106,7 @@
             }
         }
 
-        window.onload = loadStudents;
+        window.onload = loadEmployees;
     </script>
 </head>
 
@@ -115,7 +116,6 @@
 
         <!-- Sidebar -->
         <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
                 <div class="sidebar-brand-icon rotate-n-15">
                     <i class="fas fa-laugh-wink"></i>
@@ -131,7 +131,6 @@
             <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-list"></i><span>Karyawan Attendance</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/admin/jadwal_kerja"><i class="fas fa-calendar"></i><span>Jadwal Kerja</span></a></li>
             <li class="nav-item"><a class="nav-link logout" href="/logout"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a></li>
-
         </ul>
 
         <!-- Content Wrapper -->
@@ -175,7 +174,7 @@
                                                     <th>Aksi</th>
                                                 </tr>
                                             </thead>
-                                            <tbody id="students-table-body">
+                                            <tbody id="employees-table-body">
                                                 <tr>
                                                     <td colspan="5" style="text-align: center;">Memuat data...</td>
                                                 </tr>

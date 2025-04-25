@@ -44,16 +44,13 @@ with open('label_map.json', 'r') as f:
     labels = json.load(f)
 
 # Path dataset
-dataset_path = 'DataSet'
+dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
 
-test_dataset_path = "DataTest"
+test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
 
 faceDeteksi = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
 # Fungsi untuk mengunggah dataset manual ke Firebase
 # Fungsi untuk mencatat metadata ke Firebase
-# Fungsi untuk mencatat metadata ke Firebase, termasuk jumlah gambar
-
-
 # Halaman Utama (Opsi Login)
 @app.route('/')
 def home():
@@ -694,109 +691,169 @@ def admin_attendance():
                         jabatan=jabatan,
                         jadwal_kerja=jadwal_kerja)
 
-@app.route('/students/edit/<student_id>', methods=['POST'])
-def edit_student(student_id):
+# @app.route('/students/edit/<student_id>', methods=['POST'])
+# def edit_student(student_id):
+#     """
+#     Endpoint untuk mengedit data mahasiswa berdasarkan student_id.
+#     """
+#     try:
+#         data = request.json  # Data dikirim dalam format JSON dari frontend
+#         student_ref = db.reference(f'students/{student_id}')
+        
+#         # Perbarui data mahasiswa di Firebase
+#         updated_data = {
+#             'semester': data.get('semester', ''),
+#             'golongan': data.get('golongan', '')
+#         }
+#         student_ref.update(updated_data)
+
+#         return jsonify({'status': 'success', 'message': f'Data mahasiswa dengan ID {student_id} berhasil diperbarui.'})
+#     except Exception as e:
+#         print(f"Error saat memperbarui data mahasiswa: {str(e)}")
+#         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/employees/edit/<employee_id>', methods=['POST'])
+def edit_employee(employee_id):
     """
-    Endpoint untuk mengedit data mahasiswa berdasarkan student_id.
+    Endpoint untuk mengedit data karyawan berdasarkan employee_id.
     """
     try:
         data = request.json  # Data dikirim dalam format JSON dari frontend
-        student_ref = db.reference(f'students/{student_id}')
+        employee_ref = db.reference(f'employees/{employee_id}')
         
-        # Perbarui data mahasiswa di Firebase
+        # Perbarui data karyawan di Firebase
         updated_data = {
-            'semester': data.get('semester', ''),
-            'golongan': data.get('golongan', '')
+            'name': data.get('name', ''),
+            'jabatan': data.get('jabatan', '')
         }
-        student_ref.update(updated_data)
+        employee_ref.update(updated_data)
 
-        return jsonify({'status': 'success', 'message': f'Data mahasiswa dengan ID {student_id} berhasil diperbarui.'})
+        return jsonify({'status': 'success', 'message': f'Data karyawan dengan ID {employee_id} berhasil diperbarui.'})
     except Exception as e:
-        print(f"Error saat memperbarui data mahasiswa: {str(e)}")
+        print(f"Error saat memperbarui data karyawan: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-
-@app.route('/students/delete/<student_id>', methods=['DELETE'])
-def delete_student(student_id):
-    """
-    Endpoint untuk menghapus data mahasiswa berdasarkan student_id.
-    """
-    try:
-        student_ref = db.reference(f'students/{student_id}')
+# @app.route('/students/delete/<student_id>', methods=['DELETE'])
+# def delete_student(student_id):
+#     """
+#     Endpoint untuk menghapus data mahasiswa berdasarkan student_id.
+#     """
+#     try:
+#         student_ref = db.reference(f'students/{student_id}')
         
-        # Hapus data mahasiswa dari Firebase
-        student_ref.delete()
+#         # Hapus data mahasiswa dari Firebase
+#         student_ref.delete()
 
-        return jsonify({'status': 'success', 'message': f'Data mahasiswa dengan ID {student_id} berhasil dihapus.'})
+#         return jsonify({'status': 'success', 'message': f'Data mahasiswa dengan ID {student_id} berhasil dihapus.'})
+#     except Exception as e:
+#         print(f"Error saat menghapus data mahasiswa: {str(e)}")
+#         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/employees/delete/<employee_id>', methods=['DELETE'])
+def delete_employee(employee_id):
+    try:
+        employee_ref = db.reference(f'employees/{employee_id}')
+        if employee_ref.get():
+            employee_ref.delete()
+            return jsonify({'status': 'success', 'message': f'Data karyawan dengan ID {employee_id} berhasil dihapus.'})
+        else:
+            return jsonify({'status': 'error', 'message': f'Data dengan ID {employee_id} tidak ditemukan.'}), 404
     except Exception as e:
-        print(f"Error saat menghapus data mahasiswa: {str(e)}")
+        print(f"Error saat menghapus data: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-# Route untuk mengambil data mahasiswa
-@app.route('/students', methods=['GET'])
-def get_students():
+# # Route untuk mengambil data mahasiswa
+# @app.route('/students', methods=['GET'])
+# def get_students():
+#     try:
+#         combined_data = []
+
+#         # Ambil data mahasiswa
+#         students_ref = db.reference('students')
+#         students_data = students_ref.get()
+#         if students_data:
+#             for student_id, student_info in students_data.items():
+#                 folder_path = os.path.join(dataset_path, student_id)
+#                 if os.path.exists(folder_path):
+#                     images_count = len([
+#                         f for f in os.listdir(folder_path)
+#                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+#                     ])
+#                     if 'images_count' not in student_info or student_info['images_count'] == 0:
+#                         student_ref = db.reference(f'students/{student_id}')
+#                         student_ref.update({'images_count': images_count})
+
+#                 combined_data.append({
+#                     'id': student_id,
+#                     'name': student_info.get('name', 'Unknown'),
+#                     'golongan': student_info.get('golongan', 'Unknown'),
+#                     'semester': student_info.get('semester', ''),
+#                     'jabatan': '-',  # kosongkan karena mahasiswa
+#                     'images_count': student_info.get('images_count', 0),
+#                     'edit_url': f'/students/edit/{student_id}',
+#                     'delete_url': f'/students/delete/{student_id}'
+#                 })
+
+#         # Ambil data karyawan
+#         employees_ref = db.reference('employees')
+#         employees_data = employees_ref.get()
+#         if employees_data:
+#             for emp_id, emp_info in employees_data.items():
+#                 folder_path = os.path.join(dataset_path, emp_id)
+#                 if os.path.exists(folder_path):
+#                     images_count = len([
+#                         f for f in os.listdir(folder_path)
+#                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+#                     ])
+#                     if 'images_count' not in emp_info or emp_info['images_count'] == 0:
+#                         emp_ref = db.reference(f'employees/{emp_id}')
+#                         emp_ref.update({'images_count': images_count})
+
+#                 combined_data.append({
+#                     'id': emp_id,
+#                     'name': emp_info.get('name', 'Unknown'),
+#                     'golongan': '-',  # kosongkan karena karyawan
+#                     'semester': '-',  # kosongkan karena karyawan
+#                     'jabatan': emp_info.get('jabatan', 'Unknown'),
+#                     'images_count': emp_info.get('images_count', 0),
+#                     'edit_url': f'/students/edit/{emp_id}',  # kamu bisa sesuaikan endpoint edit-nya
+#                     'delete_url': f'/students/delete/{emp_id}'  # kamu bisa sesuaikan juga
+#                 })
+
+#         return jsonify({'status': 'success', 'data': combined_data})
+
+#     except Exception as e:
+#         print(f"Error saat mengambil data: {str(e)}")
+#         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/employees', methods=['GET'])
+def get_employees():
     try:
-        combined_data = []
-
-        # Ambil data mahasiswa
-        students_ref = db.reference('students')
-        students_data = students_ref.get()
-        if students_data:
-            for student_id, student_info in students_data.items():
-                folder_path = os.path.join(dataset_path, student_id)
-                if os.path.exists(folder_path):
-                    images_count = len([
-                        f for f in os.listdir(folder_path)
-                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
-                    ])
-                    if 'images_count' not in student_info or student_info['images_count'] == 0:
-                        student_ref = db.reference(f'students/{student_id}')
-                        student_ref.update({'images_count': images_count})
-
-                combined_data.append({
-                    'id': student_id,
-                    'name': student_info.get('name', 'Unknown'),
-                    'golongan': student_info.get('golongan', 'Unknown'),
-                    'semester': student_info.get('semester', ''),
-                    'jabatan': '-',  # kosongkan karena mahasiswa
-                    'images_count': student_info.get('images_count', 0),
-                    'edit_url': f'/students/edit/{student_id}',
-                    'delete_url': f'/students/delete/{student_id}'
-                })
-
-        # Ambil data karyawan
+        employees_data = []
         employees_ref = db.reference('employees')
-        employees_data = employees_ref.get()
-        if employees_data:
-            for emp_id, emp_info in employees_data.items():
-                folder_path = os.path.join(dataset_path, emp_id)
-                if os.path.exists(folder_path):
-                    images_count = len([
-                        f for f in os.listdir(folder_path)
-                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
-                    ])
-                    if 'images_count' not in emp_info or emp_info['images_count'] == 0:
-                        emp_ref = db.reference(f'employees/{emp_id}')
-                        emp_ref.update({'images_count': images_count})
+        employees = employees_ref.get()
 
-                combined_data.append({
+        print("Data dari Firebase:", employees)
+
+        if employees:
+            for emp_id, emp_info in employees.items():
+                employees_data.append({
                     'id': emp_id,
                     'name': emp_info.get('name', 'Unknown'),
-                    'golongan': '-',  # kosongkan karena karyawan
-                    'semester': '-',  # kosongkan karena karyawan
                     'jabatan': emp_info.get('jabatan', 'Unknown'),
                     'images_count': emp_info.get('images_count', 0),
-                    'edit_url': f'/students/edit/{emp_id}',  # kamu bisa sesuaikan endpoint edit-nya
-                    'delete_url': f'/students/delete/{emp_id}'  # kamu bisa sesuaikan juga
+                    'edit_url': f'/employees/edit/{emp_id}',
+                    'delete_url': f'/employees/delete/{emp_id}'
                 })
 
-        return jsonify({'status': 'success', 'data': combined_data})
+        return jsonify({'status': 'success', 'data': employees_data})
 
     except Exception as e:
-        print(f"Error saat mengambil data: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 500
-    
+
 @app.route('/admin/jadwal_mata_kuliah/delete/<golongan>/<jadwal_id>', methods=['POST'])
 def delete_jadwal(golongan, jadwal_id):
     """
@@ -814,65 +871,6 @@ def delete_jadwal(golongan, jadwal_id):
         print(f"[ERROR] Gagal menghapus jadwal {jadwal_id} dari golongan {golongan}: {e}")
 
     return redirect('/admin/jadwal_mata_kuliah')
-
-
-@app.route('/admin/edit_jadwal', methods=['POST'])
-def edit_jadwal():
-    """
-    Route untuk mengedit jadwal mata kuliah.
-    """
-    if 'user' not in session:
-        return redirect('/')
-
-    try:
-        # Ambil data dari form
-        golongan_lama = request.form.get('golongan_lama')
-        mata_kuliah_id = request.form.get('mata_kuliah_id')  # ID jadwal lama
-        golongan_baru = request.form.get('golongan')  # Golongan baru
-        kode_mk = request.form.get('kode_mk')  # Kode MK baru
-        jumlah_pertemuan = int(request.form.get('jumlah_pertemuan', 0))  # Jumlah pertemuan baru
-        mata_kuliah_baru = request.form.get('mata_kuliah')  # Nama mata kuliah baru
-        start_time = request.form.get('start_time')  # Jam mulai baru
-        end_time = request.form.get('end_time')  # Jam selesai baru
-
-        # Validasi input
-        if not all([golongan_lama, mata_kuliah_id, golongan_baru, kode_mk, jumlah_pertemuan, mata_kuliah_baru, start_time, end_time]):
-            return redirect('/admin/jadwal_mata_kuliah?error=Semua field harus diisi!')
-
-        # Referensi jadwal lama
-        jadwal_ref_lama = db.reference(f'jadwal_mata_kuliah/{golongan_lama}/{mata_kuliah_id}')
-        jadwal_data = jadwal_ref_lama.get()
-
-        if jadwal_data:
-            # Jika golongan berubah, pindahkan data ke golongan baru
-            if golongan_lama != golongan_baru:
-                jadwal_ref_lama.delete()  # Hapus data lama
-                jadwal_ref_baru = db.reference(f'jadwal_mata_kuliah/{golongan_baru}/{mata_kuliah_id}')
-                jadwal_ref_baru.set({
-                    'kode_mk': kode_mk,
-                    'name': mata_kuliah_baru,
-                    'jumlah_pertemuan': jumlah_pertemuan,
-                    'start_time': start_time,
-                    'end_time': end_time
-                })
-            else:
-                # Update data di lokasi yang sama
-                jadwal_ref_lama.update({
-                    'kode_mk': kode_mk,
-                    'name': mata_kuliah_baru,
-                    'jumlah_pertemuan': jumlah_pertemuan,
-                    'start_time': start_time,
-                    'end_time': end_time
-                })
-            message = "Jadwal berhasil diperbarui!"
-        else:
-            message = "Data jadwal lama tidak ditemukan."
-    except Exception as e:
-        message = f"Terjadi kesalahan saat memperbarui jadwal: {str(e)}"
-        print(f"[ERROR] {message}")
-
-    return redirect(f'/admin/jadwal_mata_kuliah?message={message}')
-
 
 # Admin Melihat dan Mengelola Jadwal Kerja
 @app.route('/admin/jadwal_kerja', methods=['GET', 'POST'])
@@ -954,24 +952,31 @@ def admin_jadwal_kerja():
                 except ValueError:
                     message = "Toleransi harus berupa angka!"
 
-    # Ambil semua data jadwal dari Firebase
-    jadwal_data = jadwal_ref.get()
+        # Hapus data jadwal
+        elif action == 'delete':
+            jabatan = request.form.get('del_jabatan')
+            id_jadwal = request.form.get('del_id')
 
-    if jadwal_data is None:
-        jadwal_data = {}
+            if jabatan and id_jadwal:
+                jadwal_ref.child(jabatan).child(id_jadwal).delete()
+                message = "Jadwal berhasil dihapus!"
+            else:
+                message = "Data tidak lengkap untuk proses hapus!"
+
+    # Ambil semua data jadwal dari Firebase
+    jadwal_data = jadwal_ref.get() or {}
 
     data_list = []
     for jabatan, jadwal_list in jadwal_data.items():
-        if isinstance(jadwal_list, dict):  # <- mencegah error jika bukan dict
+        if isinstance(jadwal_list, dict):
             for id_jadwal, jadwal in jadwal_list.items():
                 data_list.append({
                     'jabatan': jabatan,
-                    'id_jadwal': jadwal.get('id_jadwal'),
-                    'jam_masuk': jadwal.get('jam_masuk'),
-                    'jam_pulang': jadwal.get('jam_pulang'),
-                    'toleransi_keterlambatan': jadwal.get('toleransi_keterlambatan')
+                    'id_jadwal': jadwal.get('id_jadwal', id_jadwal),
+                    'jam_masuk': jadwal.get('jam_masuk', ''),
+                    'jam_pulang': jadwal.get('jam_pulang', ''),
+                    'toleransi_keterlambatan': jadwal.get('toleransi_keterlambatan', 0)
                 })
-
 
     return render_template(
         'admin_jadwal_kerja.html',
@@ -979,6 +984,8 @@ def admin_jadwal_kerja():
         message=message,
         edit_data=edit_data
     )
+
+
 
 
 # Admin Mengatur Jadwal Absensi
@@ -1293,8 +1300,8 @@ def train():
             import json
 
             # Konfigurasi dataset
-            dataset_path = "DataSet"
-            test_dataset_path = "DataTest"
+            dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
+            test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
             img_size = (224, 224)
             batch_size = 32
 
@@ -1516,4 +1523,4 @@ def logout():
 
 # Jalankan aplikasi Flask
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5050)
