@@ -76,35 +76,34 @@ def login_admin():
 
     return render_template('login_admin.html')
 
-# Login Mahasiswa
-@app.route('/login_mahasiswa', methods=['GET', 'POST'])
-def login_mahasiswa():
+# Login Karyawan
+@app.route('/login_karyawan', methods=['GET', 'POST'])
+def login_karyawan():
     if request.method == 'POST':
-        nim = request.form['nim']
-        students_ref = db.reference('students')
-        students_data = students_ref.get()
-        for student_id, student_info in students_data.items():
-            if student_info['nim'] == nim:
-                session['mahasiswa'] = {
-                    'id': student_info.get('id', ''),
-                    'name': student_info.get('name', ''),
-                    'nim': student_info.get('nim', ''),
-                    'mata_kuliah': student_info.get('mata_kuliah', []),
-                    'golongan': student_info.get('golongan', '')
+        id = request.form['id']
+        karyawan_ref = db.reference('employees')
+        karyawan_data = karyawan_ref.get()
+        for karyawan_id, karyawan_info in karyawan_data.items():
+            if karyawan_info['id'] == id:
+                session['karyawan'] = {
+                    'id': karyawan_info.get('id', ''),
+                    'name': karyawan_info.get('name', ''),
+                    'jabatan': karyawan_info.get('jabatan', []),
                 }
-                return redirect('/mahasiswa_dashboard')
+                return redirect('/karyawan_dashboard')
 
-        return render_template('login_mahasiswa.html', message="NIM tidak ditemukan atau tidak terdaftar!")
+        return render_template('login_karyawan.html', message="ID tidak ditemukan atau tidak terdaftar!")
 
-    return render_template('login_mahasiswa.html')
+    return render_template('login_karyawan.html')
 
-@app.route('/mahasiswa_dashboard')
-def mahasiswa_dashboard():
-    if 'mahasiswa' not in session:
-        return redirect('/login_mahasiswa')
+@app.route('/karyawan_dashboard')
+def karyawan_dashboard():
+    if 'karyawan' not in session:
+        flash('Silakan login terlebih dahulu', 'warning')
+        return redirect('/login_karyawan')
     
-    mahasiswa = session['mahasiswa']
-    return render_template('mahasiswa_dashboard.html', mahasiswa=mahasiswa)
+    karyawan = session['karyawan']
+    return render_template('karyawan_dashboard.html', karyawan=karyawan)
 
 #Register Admin
 @app.route('/register', methods=['GET', 'POST'])

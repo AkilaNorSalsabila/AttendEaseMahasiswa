@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Home Page">
-    <title>Home</title>
+    <meta name="description" content="Student Login Page">
+    <title>Login karyawan</title>
 
     <!-- Custom fonts for this template-->
     <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
@@ -22,22 +22,33 @@
         <!-- Outer Row -->
         <div class="row justify-content-center">
 
-            <div class="col-xl-8 col-lg-10 col-md-12">
+            <div class="col-xl-6 col-lg-8 col-md-10">
 
                 <div class="card o-hidden border-0 shadow-lg my-5">
                     <div class="card-body p-0">
                         <!-- Nested Row within Card Body -->
                         <div class="row">
                             <div class="col-lg-12">
-                                <div class="p-5 text-center">
-                                    <h1 class="h4 text-gray-900 mb-4">Selamat Datang</h1>
-                                    <p class="mb-4">Pilih jenis login:</p>
-                                    <a href="/login_admin" class="btn btn-primary btn-user btn-block mb-2">
-                                        Login sebagai Admin
-                                    </a>
-                                    <a href="/login_karyawan" class="btn btn-success btn-user btn-block">
-                                        Login sebagai Karyawan
-                                    </a>
+                                <div class="p-5">
+                                    <div class="text-center">
+                                        <h1 class="h4 text-gray-900 mb-4">Login karyawan</h1>
+                                    </div>
+                                    <form method="POST" class="user">
+                                        <div class="form-group">
+                                            <label for="id" class="text-gray-800">ID:</label>
+                                            <input type="text" id="id" name="id" class="form-control form-control-user" placeholder="Masukkan ID Anda" required>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-user btn-block">Login</button>
+                                    </form>
+                                    {% if message %}
+                                    <div class="text-center mt-3">
+                                        <p class="text-danger">{{ message }}</p>
+                                    </div>
+                                    {% endif %}
+                                    <hr>
+                                    <div class="text-center">
+                                        <a class="small" href="/">Kembali</a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
