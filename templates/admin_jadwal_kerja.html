@@ -10,7 +10,6 @@
 <body id="page-top">
 
 <div id="wrapper">
-
     <!-- Sidebar -->
     <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
         <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
@@ -44,7 +43,7 @@
                 <span>Karyawan Attendance</span>
             </a>
         </li>
-        <li class="nav-item">
+        <li class="nav-item active">
             <a class="nav-link" href="/admin/jadwal_kerja">
                 <i class="fas fa-calendar"></i>
                 <span>Jadwal Kerja</span>
@@ -59,18 +58,23 @@
     </ul>
     <!-- End of Sidebar -->
 
+    <!-- Content Wrapper -->
     <div id="content-wrapper" class="d-flex flex-column">
         <div id="content">
 
+            <!-- Topbar -->
             <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
                 <span class="navbar-text font-weight-bold text-gray-800">Jadwal Kerja Karyawan</span>
             </nav>
 
+            <!-- Main Content -->
             <div class="container-fluid">
+
                 {% if message %}
                     <div class="alert alert-info">{{ message }}</div>
                 {% endif %}
 
+                <!-- Form Tambah/Edit -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between">
                         <h6 class="m-0 font-weight-bold text-primary">
@@ -81,12 +85,12 @@
                         <form method="POST">
                             <input type="hidden" name="action" value="{{ 'update' if edit_data else 'add' }}">
                             <div class="form-group">
-                                <label for="jabatan">Jabatan</label>
-                                <input type="text" name="jabatan" class="form-control" value="{{ edit_data.jabatan if edit_data else '' }}" required>
-                            </div>
-                            <div class="form-group">
                                 <label for="id_jadwal">ID Jadwal</label>
                                 <input type="text" name="id_jadwal" class="form-control" value="{{ edit_data.id_jadwal if edit_data else '' }}" required {% if edit_data %}readonly{% endif %}>
+                            </div>
+                            <div class="form-group">
+                                <label for="jabatan">Jabatan</label>
+                                <input type="text" name="jabatan" class="form-control" value="{{ edit_data.jabatan if edit_data else '' }}" required>
                             </div>
                             <div class="form-group">
                                 <label for="jam_masuk">Jam Masuk</label>
@@ -108,7 +112,7 @@
                     </div>
                 </div>
 
-                <!-- Tabel Daftar Jadwal -->
+                <!-- Tabel Jadwal -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
                         <h6 class="m-0 font-weight-bold text-primary">Daftar Jadwal Kerja</h6>
@@ -118,28 +122,34 @@
                             <table class="table table-bordered" width="100%" cellspacing="0">
                                 <thead>
                                     <tr>
-                                        <th>Jabatan</th>
                                         <th>ID Jadwal</th>
+                                        <th>Jabatan</th>
                                         <th>Jam Masuk</th>
                                         <th>Jam Pulang</th>
-                                        <th>Toleransi (menit)</th>
+                                        <th>Toleransi</th>
                                         <th>Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for jadwal in data_list %}
                                     <tr>
-                                        <td>{{ jadwal.jabatan }}</td>
                                         <td>{{ jadwal.id_jadwal }}</td>
+                                        <td>{{ jadwal.jabatan }}</td>
                                         <td>{{ jadwal.jam_masuk }}</td>
                                         <td>{{ jadwal.jam_pulang }}</td>
-                                        <td>{{ jadwal.toleransi_keterlambatan }}</td>
+                                        <td>{{ jadwal.toleransi_keterlambatan }} menit</td>
                                         <td>
                                             <form method="POST" style="display:inline;">
                                                 <input type="hidden" name="action" value="prepare_edit">
                                                 <input type="hidden" name="edit_id" value="{{ jadwal.id_jadwal }}">
                                                 <input type="hidden" name="edit_jabatan" value="{{ jadwal.jabatan }}">
                                                 <button type="submit" class="btn btn-sm btn-primary">Edit</button>
+                                            </form>
+                                            <form method="POST" style="display:inline;" onsubmit="return confirm('Yakin ingin menghapus jadwal ini?');">
+                                                <input type="hidden" name="action" value="delete">
+                                                <input type="hidden" name="del_id" value="{{ jadwal.id_jadwal }}">
+                                                <input type="hidden" name="del_jabatan" value="{{ jadwal.jabatan }}">
+                                                <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
                                             </form>
                                         </td>
                                     </tr>
@@ -151,6 +161,7 @@
                 </div>
 
             </div>
+            <!-- End container -->
         </div>
     </div>
 </div>
