@@ -16,6 +16,7 @@ import seaborn as sns
 import re  # Tambahkan baris ini
 from flask import Flask, render_template, request, redirect, session, jsonify
 # ... import lainnya yang sudah ada
+from tensorflow.keras.models import load_model
 
 
 
@@ -30,12 +31,13 @@ dataset_path = 'DataSet'
 
 # Inisialisasi Firebase
 # Inisialisasi Firebase
+# Inisialisasi Firebase
 cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+
 initialize_app(cred, {
     'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+    'storageBucket': 'facerecognition-c8264.appspot.com'  # Menambahkan storageBucket
 })
-bucket = storage.bucket('facerecognition-c8264.appspot.com')
-
 # Load model hasil fine-tuning
 model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
 
@@ -170,130 +172,160 @@ def dashboard():
 import time
 
 
-def gen(user_id, mata_kuliah, minggu_ke, nim):
-    golongan = "A"  # Golongan bisa disesuaikan sesuai kebutuhan
-    jadwal_ref = db.reference(f'jadwal_mata_kuliah/{golongan}/{mata_kuliah}')
-    jadwal_data = jadwal_ref.get()
-    nama_mata_kuliah = jadwal_data.get('name', 'Unknown')
-    kode_mata_kuliah_asli = jadwal_data.get('kode_mk', mata_kuliah)
+# Generator untuk streaming dan face-recog
+# Generator untuk streaming dan face recognition absensi karyawan
+import cv2
+import os
+import numpy as np
+from datetime import datetime
+from firebase_admin import db, storage
+from flask import Response, jsonify, redirect, render_template, request, session
 
-    # Inisialisasi kamera
+# Fungsi untuk menangani absensi dan pengambilan gambar wajah karyawan
+# Fungsi untuk menangani absensi dan pengambilan gambar wajah karyawan
+def gen(user_id, jadwal_id, jam_masuk, jam_pulang):
     camera = cv2.VideoCapture(0)
     if not camera.isOpened():
-        print("[ERROR] Kamera tidak dapat dibuka. Pastikan kamera tersedia.")
+        print("[ERROR] Kamera tidak dapat dibuka.")
         return
 
     attendance_logged = False
-    detected_name = "Unknown"
-    capture_dir = "captures"
+    capture_dir = 'captures'
     os.makedirs(capture_dir, exist_ok=True)
 
     try:
         while True:
-            # Jika absensi sudah dicatat, hentikan generator
-            if attendance_logged:
-                print("[DEBUG] Absensi sudah dicatat. Menghentikan generator.")
-                break
-
             success, frame = camera.read()
             if not success:
-                print("[ERROR] Tidak dapat membaca frame dari kamera.")
                 break
 
-            # Konversi ke grayscale untuk deteksi wajah
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
             for (x, y, w, h) in faces:
-                # Preprocess wajah untuk input model
-                face_img = frame[y:y + h, x:x + w]
+                face_img = frame[y:y+h, x:x+w]
                 face_img = cv2.resize(face_img, (224, 224))
                 face_img = np.expand_dims(face_img, axis=0) / 255.0
 
-                # Prediksi menggunakan model CNN
-                prediction = model.predict(face_img)
-                confidence = float(np.max(prediction[0]))
-                detected_id = str(np.argmax(prediction[0]) + 1)
-                detected_name = labels.get(detected_id, "Unknown")
+                pred = model.predict(face_img)
+                confidence = float(np.max(pred[0]))
+                detected_idx = str(np.argmax(pred[0]) + 1)
 
-                print(f"[DEBUG] Deteksi wajah: ID={detected_id}, Confidence={confidence:.2f}, Nama={detected_name}")
+                # Ubah detected_idx jadi format user_id (misal "KRY-01")
+                detected_user_id = f"KRY-{detected_idx.zfill(2)}"  # Misal 1 jadi "KRY-01"
 
-                # Validasi NIM
-                detected_nim = detected_name.split("-")[1] if "-" in detected_name else None
-                expected_nim = user_id.split("-")[1] if "-" in user_id else None
+                detected_label = labels.get(detected_idx, 'Unknown')
 
-                print(f"[DEBUG] Detected NIM: {detected_nim}, Expected NIM: {expected_nim}")
+                # Visualisasi
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                cv2.putText(frame, f"{detected_user_id} ({confidence*100:.1f}%)", (x, y-10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                # Tambahkan kotak di sekitar wajah dan teks
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(
-                    frame,
-                    f"{detected_name} ({confidence * 100:.2f}%)",
-                    (x, y - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 255, 0),
-                    2,
-                )
+                # Print Expected vs Detected
+                print(f"[INFO] Expected: {user_id} | Detected: {detected_user_id} | Confidence: {confidence:.2f}")
 
-                # Cek apakah absensi dapat dicatat
-                if confidence >= 0.75 and detected_nim == expected_nim and not attendance_logged:
-                    try:
-                        # Simpan absensi ke Firebase
-                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        image_path = f"attendance_{user_id}_{timestamp.replace(':', '-')}.jpg"
-                        local_filepath = os.path.join(capture_dir, image_path)
-                        cv2.imwrite(local_filepath, frame)
+                # Cek apakah sama dan confidence cukup
+                if detected_user_id == user_id and confidence >= 0.75 and not attendance_logged:
+                    timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+                    filename = f"att_{user_id}_{jadwal_id}_{timestamp}.jpg"
+                    filepath = os.path.join(capture_dir, filename)
 
-                        # Unggah ke Firebase Storage
-                        blob = bucket.blob(f'attendance_images/{image_path}')
-                        blob.upload_from_filename(local_filepath)
-                        blob.make_public()
-                        image_url = blob.public_url
+                    cv2.imwrite(filepath, frame)
+                    print(f"[DEBUG] Gambar berhasil disimpan di {filepath}")
 
-                        # Simpan data absensi ke Realtime Database
-                        attendance_ref = db.reference(f"attendance/{mata_kuliah}/{minggu_ke}/{user_id}")
-                        attendance_data = {
-                            "nim": nim,
-                            "name": detected_name,
-                            "kode_mata_kuliah": mata_kuliah,
-                            "nama_mata_kuliah": nama_mata_kuliah,
-                            "minggu_ke": minggu_ke,
-                            "status": "Hadir",
-                            "timestamp": timestamp,
-                            "image_url": image_url,
-                            "golongan": golongan
-                        }
-                        attendance_ref.push(attendance_data)
-                        print(f"[SUCCESS] Data absensi berhasil disimpan: {attendance_data}")
+                    bucket = storage.bucket()
+                    blob = bucket.blob(f'attendance_images/{filename}')
+                    blob.upload_from_filename(filepath)
+                    blob.make_public()
+                    image_url = blob.public_url
 
-                        attendance_logged = True
-                        break
-                    except Exception as e:
-                        print(f"[ERROR] Terjadi kesalahan saat mencatat absensi: {e}")
+                    ref = db.reference(f"attendance_karyawan/{jadwal_id}/{user_id}")
 
-            # Streaming frame ke frontend
-            _, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
+                    data = {
+                        'id_jadwal': jadwal_id,
+                        'jam_masuk': jam_masuk,
+                        'jam_pulang': jam_pulang,
+                        'timestamp': timestamp,
+                        'image_url': image_url,
+                        'status': 'Hadir'
+                    }
+                    ref.push(data)
+                    print("[SUCCESS] Absensi tercatat di Firebase:", data)
+                    attendance_logged = True
+
+            ret, buf = cv2.imencode('.jpg', frame)
+            frame_bytes = buf.tobytes()
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-    except Exception as e:
-        print(f"[ERROR] Terjadi kesalahan pada fungsi gen: {e}")
+            if attendance_logged:
+                break
+
     finally:
-        # Pastikan kamera ditutup dan window dihentikan
         camera.release()
         cv2.destroyAllWindows()
-        print("[INFO] Kamera ditutup dan jendela video dihentikan.")
 
 
-@app.route('/video_feed/<user_id>/<jadwal_kerja>/<minggu_ke>/<id>')
-def video_feed(user_id, jadwal_kerja, minggu_ke,id):
-    print(f"[DEBUG] Video feed accessed for user_id={user_id}, jadwal_kerja={jadwal_kerja}, minggu_ke={minggu_ke}, id={id}")
-    return Response(
-        gen(user_id, jadwal_kerja, minggu_ke, id),
-        mimetype='multipart/x-mixed-replace; boundary=frame'
-    )
+# Route untuk streaming video
+@app.route('/video_feed/<user_id>/<jadwal_id>/<jam_masuk>/<jam_pulang>')
+def video_feed(user_id, jadwal_id, jam_masuk, jam_pulang):
+    return Response(gen(user_id, jadwal_id, jam_masuk, jam_pulang),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# Route untuk halaman absen karyawan
+@app.route('/absen', methods=['GET', 'POST'])
+def absen():
+    if 'karyawan' not in session:
+        return redirect('/login_karyawan')
+
+    karyawan = session['karyawan']
+
+    if request.method == 'GET':
+        jadwal_id = request.args.get('jadwal_id')
+        jam_masuk = request.args.get('jam_masuk')
+        jam_pulang = request.args.get('jam_pulang')
+
+        if not all([jadwal_id, jam_masuk, jam_pulang]):
+            return "Parameter jadwal tidak lengkap", 400
+
+        return render_template('absen.html',
+                               karyawan=karyawan,
+                               jadwal_id=jadwal_id,
+                               jam_masuk=jam_masuk,
+                               jam_pulang=jam_pulang)
+
+    elif request.method == 'POST':
+       
+
+            return jsonify({'status': 'error', 'message': 'Terjadi kesalahan saat menyimpan absensi.'}), 500
+
+# Route untuk memeriksa status absensi karyawan
+@app.route('/check_absen_status_karyawan', methods=['GET'])
+def check_absen_status_karyawan():
+    user_id = request.args.get('user_id')
+    jadwal_id = request.args.get('jadwal_id')
+
+    if not user_id or not jadwal_id:
+        print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id' dan 'jadwal_id' disertakan.")
+        return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
+
+    print(f"[DEBUG] Checking attendance for user_id={user_id}, jadwal_id={jadwal_id}")
+
+    try:
+        # Referensi ke database karyawan
+        attendance_ref = db.reference(f"attendance_karyawan/{jadwal_id}/{user_id}")
+
+        data = attendance_ref.get()
+
+        if data:
+            print("[DEBUG] Attendance Data Found:", data)
+            return jsonify({"status": "success", "data": data})
+        else:
+            print("[DEBUG] Attendance Data Not Found")
+            return jsonify({"status": "pending", "message": "Data absensi tidak ditemukan"}), 404
+    except Exception as e:
+        print(f"[ERROR] Terjadi kesalahan saat memeriksa status absensi: {e}")
+        return jsonify({"status": "error", "message": "Terjadi kesalahan server"}), 500
 
 
 def generate_new_employee_id():
@@ -1043,147 +1075,117 @@ def set_absensi():
 
     return render_template('set_absensi.html', message=None)
     
-@app.route('/absen', methods=['GET', 'POST'])
-def absen():
-    if 'karyawan' not in session:
-        flash('Silakan login terlebih dahulu', 'warning')
-        return redirect('/login_karyawan')
+# @app.route('/absen', methods=['GET'])
+# def absen():
+#     if 'karyawan' not in session:
+#         flash('Silakan login terlebih dahulu', 'warning')
+#         return redirect('/login_karyawan')
 
-    karyawan = session['karyawan']
-    jabatan = karyawan.get('jabatan', '')
+#     karyawan = session['karyawan']
+    
+#     return render_template('absen.html', karyawan=karyawan)
 
-    jadwal_kerja_data = []
-    jadwal_ref = db.reference(f'jadwal_kerja/{jabatan}')
-    jadwal_data = jadwal_ref.get()
+# def run_face_recognition(user_id):
+#     """
+#     Fungsi untuk deteksi wajah dan menyimpan data absensi.
+#     """
+#     username_full = labels.get(user_id, "Unknown")
+#     username = username_full.split("", 1)[1] if "" in username_full else username_full
 
-    if jadwal_data:
-        for k, v in jadwal_data.items():
-            jadwal_kerja = {
-                'id': k,
-                'name': v.get('name', 'Tidak Ada Nama'),
-                'jam_masuk': v.get('jam_masuk', ''),
-                'jam_pulang': v.get('jam_pulang', ''),
-                'status': v.get('status', 'Tidak Hadir'),
-                'is_terlambat': False
-            }
-            
-            # Periksa apakah waktu absensi sudah lewat
-            jam_masuk = jadwal_kerja['jam_masuk']
-            if jam_masuk:
-                jam_masuk_time = datetime.strptime(jam_masuk, '%H:%M')
-                now = datetime.now()
+#     video = cv2.VideoCapture(0)
+#     if not video.isOpened():
+#         print("[ERROR] Kamera tidak dapat dibuka. Pastikan kamera tersedia.")
+#         return
 
-                if now > jam_masuk_time and now - jam_masuk_time > timedelta(minutes=15):
-                    jadwal_kerja['is_terlambat'] = True
-                else:
-                    jadwal_kerja['is_terlambat'] = False
+#     face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
-            jadwal_kerja_data.append(jadwal_kerja)
+#     locked_label = "Unknown"
+#     lock_frames = 0
+#     threshold_confidence = 0.75
+#     min_consecutive_frames = 5
+#     attendance_logged = False
 
-    return render_template('absen.html', karyawan=karyawan, jadwal_kerja_data=jadwal_kerja_data)
+#     print("[INFO] Mulai deteksi wajah...")
+#     while True:
+#         ret, frame = video.read()
+#         if not ret:
+#             print("[ERROR] Tidak dapat membaca frame dari kamera.")
+#             break
 
+#         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#         faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-def run_face_recognition(user_id):
-    """
-    Fungsi untuk deteksi wajah dan menyimpan data absensi.
-    """
-    username_full = labels.get(user_id, "Unknown")
-    username = username_full.split("", 1)[1] if "" in username_full else username_full
+#         if len(faces) == 0:
+#             print("[INFO] Tidak ada wajah yang terdeteksi.")
+#         else:
+#             print(f"[INFO] {len(faces)} wajah terdeteksi.")
 
-    video = cv2.VideoCapture(0)
-    if not video.isOpened():
-        print("[ERROR] Kamera tidak dapat dibuka. Pastikan kamera tersedia.")
-        return
+#         for (x, y, w, h) in faces:
+#             face_img = frame[y:y + h, x:x + w]
+#             face_img = cv2.resize(face_img, (224, 224))
+#             face_img = np.expand_dims(face_img, axis=0) / 255.0
 
-    face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+#             prediction = model.predict(face_img)
+#             confidence = float(np.max(prediction[0]))
+#             id_detected = str(np.argmax(prediction[0]) + 1)
 
-    locked_label = "Unknown"
-    lock_frames = 0
-    threshold_confidence = 0.75
-    min_consecutive_frames = 5
-    attendance_logged = False
+#             print(f"[DEBUG] Deteksi: ID={id_detected}, Confidence={confidence:.2f}, Lock frames={lock_frames}")
 
-    print("[INFO] Mulai deteksi wajah...")
-    while True:
-        ret, frame = video.read()
-        if not ret:
-            print("[ERROR] Tidak dapat membaca frame dari kamera.")
-            break
+#             if confidence >= threshold_confidence and id_detected == user_id:
+#                 lock_frames += 1
+#                 if lock_frames >= min_consecutive_frames and not attendance_logged:
+#                     try:
+#                         # Simpan frame sebagai gambar
+#                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#                         image_path = f"attendance_{user_id}_{timestamp}.jpg"
+#                         cv2.imwrite(image_path, frame)
+#                         print("[INFO] Gambar berhasil disimpan:", image_path)
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+#                         # Unggah gambar ke Firebase Storage
+#                         try:
+#                             blob = bucket.blob(f'attendance_images/{image_path}')
+#                             blob.upload_from_filename(image_path)
+#                             blob.make_public()
+#                             image_url = blob.public_url
+#                             print("[SUCCESS] Gambar berhasil diunggah ke Firebase Storage. URL:", image_url)
+#                         except Exception as e:
+#                             print("[ERROR] Gagal mengunggah gambar ke Firebase Storage:", str(e))
+#                             continue
 
-        if len(faces) == 0:
-            print("[INFO] Tidak ada wajah yang terdeteksi.")
-        else:
-            print(f"[INFO] {len(faces)} wajah terdeteksi.")
+#                         # Simpan data ke Firebase Realtime Database
+#                         try:
+#                             attendance_data = {
+#                                 'user_id': user_id,
+#                                 'username': username,
+#                                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+#                                 'confidence': confidence,
+#                                 'image_url': image_url
+#                             }
+#                             db.reference(f'attendance/{user_id}').push(attendance_data)
+#                             print("[SUCCESS] Data presensi berhasil disimpan:", attendance_data)
+#                         except Exception as e:
+#                             print("[ERROR] Gagal menyimpan data ke Firebase Realtime Database:", str(e))
+#                             continue
 
-        for (x, y, w, h) in faces:
-            face_img = frame[y:y + h, x:x + w]
-            face_img = cv2.resize(face_img, (224, 224))
-            face_img = np.expand_dims(face_img, axis=0) / 255.0
+#                         # Hapus gambar lokal
+#                         os.remove(image_path)
+#                         print("[INFO] Gambar lokal dihapus:", image_path)
 
-            prediction = model.predict(face_img)
-            confidence = float(np.max(prediction[0]))
-            id_detected = str(np.argmax(prediction[0]) + 1)
+#                         attendance_logged = True  # Tandai presensi sudah tercatat
+#                         break  # Keluar dari loop setelah presensi berhasil
+#                     except Exception as e:
+#                         print("[ERROR] Terjadi kesalahan saat mencatat presensi:", str(e))
+#             else:
+#                 lock_frames = 0
 
-            print(f"[DEBUG] Deteksi: ID={id_detected}, Confidence={confidence:.2f}, Lock frames={lock_frames}")
+#         if attendance_logged:
+#                  print("[INFO] Presensi selesai, keluar dari loop.")
+#                  break
 
-            if confidence >= threshold_confidence and id_detected == user_id:
-                lock_frames += 1
-                if lock_frames >= min_consecutive_frames and not attendance_logged:
-                    try:
-                        # Simpan frame sebagai gambar
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        image_path = f"attendance_{user_id}_{timestamp}.jpg"
-                        cv2.imwrite(image_path, frame)
-                        print("[INFO] Gambar berhasil disimpan:", image_path)
-
-                        # Unggah gambar ke Firebase Storage
-                        try:
-                            blob = bucket.blob(f'attendance_images/{image_path}')
-                            blob.upload_from_filename(image_path)
-                            blob.make_public()
-                            image_url = blob.public_url
-                            print("[SUCCESS] Gambar berhasil diunggah ke Firebase Storage. URL:", image_url)
-                        except Exception as e:
-                            print("[ERROR] Gagal mengunggah gambar ke Firebase Storage:", str(e))
-                            continue
-
-                        # Simpan data ke Firebase Realtime Database
-                        try:
-                            attendance_data = {
-                                'user_id': user_id,
-                                'username': username,
-                                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                'confidence': confidence,
-                                'image_url': image_url
-                            }
-                            db.reference(f'attendance/{user_id}').push(attendance_data)
-                            print("[SUCCESS] Data presensi berhasil disimpan:", attendance_data)
-                        except Exception as e:
-                            print("[ERROR] Gagal menyimpan data ke Firebase Realtime Database:", str(e))
-                            continue
-
-                        # Hapus gambar lokal
-                        os.remove(image_path)
-                        print("[INFO] Gambar lokal dihapus:", image_path)
-
-                        attendance_logged = True  # Tandai presensi sudah tercatat
-                        break  # Keluar dari loop setelah presensi berhasil
-                    except Exception as e:
-                        print("[ERROR] Terjadi kesalahan saat mencatat presensi:", str(e))
-            else:
-                lock_frames = 0
-
-        if attendance_logged:
-                 print("[INFO] Presensi selesai, keluar dari loop.")
-                 break
-
-    video.release()
-    cv2.destroyAllWindows()
-    if not attendance_logged:
-        print("[ERROR] Presensi tidak tercatat. Pastikan wajah terlihat jelas.")
+#     video.release()
+#     cv2.destroyAllWindows()
+#     if not attendance_logged:
+#         print("[ERROR] Presensi tidak tercatat. Pastikan wajah terlihat jelas.")
 
 @app.route('/rekap_absensi', methods=['GET'])
 def rekap_absensi():
@@ -1248,36 +1250,61 @@ def rekap_absensi():
     )
 
 
-@app.route('/check_absen_status', methods=['GET'])
-def check_absen_status():
-    # Mendapatkan parameter dari URL
-    user_id = request.args.get('user_id')
-    jadwal_kerja = request.args.get('jadwal_kerja')  # Harus berupa kode asli
-    minggu_ke = request.args.get('minggu_ke')
+# @app.route('/check_absen_status', methods=['GET'])
+# def check_absen_status():
+#     # Mendapatkan parameter dari URL
+#     user_id = request.args.get('user_id')
+#     jadwal_kerja = request.args.get('jadwal_kerja')  # Harus berupa kode asli
+#     minggu_ke = request.args.get('minggu_ke')
 
-    # Validasi parameter
-    if not user_id or not jadwal_kerja or not minggu_ke:
-        print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id', 'jadwal_kerja', dan 'minggu_ke' disertakan.")
-        return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
+#     # Validasi parameter
+#     if not user_id or not jadwal_kerja or not minggu_ke:
+#         print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id', 'jadwal_kerja', dan 'minggu_ke' disertakan.")
+#         return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
 
-    print(f"[DEBUG] Checking attendance for user_id={user_id}, mata_kuliah={jadwal_kerja}, minggu_ke={minggu_ke}")
+#     print(f"[DEBUG] Checking attendance for user_id={user_id}, mata_kuliah={jadwal_kerja}, minggu_ke={minggu_ke}")
 
-    try:
-        # Referensi ke lokasi data absensi di Firebase Realtime Database
-        attendance_ref = db.reference(f"attendance/{jadwal_kerja}/{minggu_ke}/{user_id}")
-        data = attendance_ref.get()
+#     try:
+#         # Referensi ke lokasi data absensi di Firebase Realtime Database
+#         attendance_ref = db.reference(f"attendance/{jadwal_kerja}/{minggu_ke}/{user_id}")
+#         data = attendance_ref.get()
 
-        if data:
-            print("[DEBUG] Attendance Data Found:", data)
-            return jsonify({"status": "success", "data": data})
-        else:
-            print("[DEBUG] Attendance Data Not Found")
-            return jsonify({"status": "pending", "message": "Data absensi tidak ditemukan"}), 404
-    except Exception as e:
-        # Menangkap kesalahan selama proses membaca data dari Firebase
-        print(f"[ERROR] Terjadi kesalahan saat memeriksa status absensi: {e}")
-        return jsonify({"status": "error", "message": "Terjadi kesalahan server"}), 500
+#         if data:
+#             print("[DEBUG] Attendance Data Found:", data)
+#             return jsonify({"status": "success", "data": data})
+#         else:
+#             print("[DEBUG] Attendance Data Not Found")
+#             return jsonify({"status": "pending", "message": "Data absensi tidak ditemukan"}), 404
+#     except Exception as e:
+#         # Menangkap kesalahan selama proses membaca data dari Firebase
+#         print(f"[ERROR] Terjadi kesalahan saat memeriksa status absensi: {e}")
+#         return jsonify({"status": "error", "message": "Terjadi kesalahan server"}), 500
 
+# @app.route('/check_absen_status_karyawan', methods=['GET'])
+# def check_absen_status_karyawan():
+#     user_id = request.args.get('user_id')
+#     jadwal_id = request.args.get('jadwal_id')
+
+#     if not user_id or not jadwal_id:
+#         print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id' dan 'jadwal_id' disertakan.")
+#         return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
+
+#     print(f"[DEBUG] Checking attendance for user_id={user_id}, jadwal_id={jadwal_id}")
+
+#     try:
+#         # Referensi ke database karyawan
+#         attendance_ref = db.reference(f"attendance_karyawan/{jadwal_id}/{user_id}")
+#         data = attendance_ref.get()
+
+#         if data:
+#             print("[DEBUG] Attendance Data Found:", data)
+#             return jsonify({"status": "success", "data": data})
+#         else:
+#             print("[DEBUG] Attendance Data Not Found")
+#             return jsonify({"status": "pending", "message": "Data absensi tidak ditemukan"}), 404
+#     except Exception as e:
+#         print(f"[ERROR] Terjadi kesalahan saat memeriksa status absensi: {e}")
+#         return jsonify({"status": "error", "message": "Terjadi kesalahan server"}), 500
 
 # Fungsi untuk menyimpan progres
 def save_progress(progress):

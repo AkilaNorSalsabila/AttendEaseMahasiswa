@@ -21,29 +21,17 @@
 
         <!-- Sidebar -->
         <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-
-            <!-- Sidebar - Brand -->
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
                 <div class="sidebar-brand-icon rotate-n-15">
                     <i class="fas fa-laugh-wink"></i>
                 </div>
-                <div class="sidebar-brand-text mx-3">Karyawan Beranda</div>
+                <div class="sidebar-brand-text mx-3">Beranda Karyawan</div>
             </a>
-
-            <!-- Divider -->
             <hr class="sidebar-divider">
-
-            <!-- Sidebar Links -->
             <li class="nav-item">
                 <a class="nav-link" href="/karyawan_dashboard">
                     <i class="fas fa-home"></i>
                     <span>Dashboard</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/absen">
-                    <i class="fas fa-check-circle"></i>
-                    <span>Absen</span>
                 </a>
             </li>
             <li class="nav-item">
@@ -69,6 +57,9 @@
 
                 <!-- Topbar -->
                 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+                    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
+                        <i class="fa fa-bars"></i>
+                    </button>
                     <ul class="navbar-nav ml-auto">
                         <li class="nav-item dropdown no-arrow">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown">
@@ -78,6 +69,7 @@
                         </li>
                     </ul>
                 </nav>
+                <!-- End of Topbar -->
 
                 <!-- Begin Page Content -->
                 <div class="container-fluid">
@@ -93,7 +85,7 @@
                         <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
                             <thead>
                                 <tr>
-                                    <th>Nama Jadwal Kerja</th>
+                                    <th>ID Jadwal Kerja</th>
                                     <th>Jam Masuk</th>
                                     <th>Jam Pulang</th>
                                     <th>Status</th>
@@ -104,7 +96,7 @@
                                 {% if jadwal_kerja_data %}
                                     {% for jadwal in jadwal_kerja_data %}
                                     <tr>
-                                        <td>{{ jadwal.name }}</td>
+                                        <td>{{ jadwal.id }}</td>
                                         <td>{{ jadwal.jam_masuk }}</td>
                                         <td>{{ jadwal.jam_pulang }}</td>
                                         <td>
@@ -116,26 +108,30 @@
                                         </td>
                                         <td>
                                             {% if not jadwal.is_terlambat %}
-                                                <a href="/absen" class="btn btn-primary">Mulai Absen</a>
+                                            <a href="/absen?jadwal_id={{ jadwal.id }}&jam_masuk={{ jadwal.jam_masuk }}&jam_pulang={{ jadwal.jam_pulang }}" class="btn btn-primary">Mulai Absen</a>
                                             {% else %}
                                                 <span class="badge badge-warning">Terlambat</span>
                                             {% endif %}
                                         </td>
+                                        
                                     </tr>
                                     {% endfor %}
-                                {% else %}
-                                    <tr>
-                                        <td colspan="5" class="text-center">Tidak ada jadwal absensi yang aktif saat ini.</td>
-                                    </tr>
-                                {% endif %}
                             </tbody>
                         </table>
-                    </div>
+                    {% else %}
+                        <p class="text-center">Tidak ada jadwal pertemuan untuk hari ini.</p>
+                    {% endif %}
                 </div>
+                <!-- /.container-fluid -->
+
             </div>
+            <!-- End of Main Content -->
+
         </div>
+        <!-- End of Content Wrapper -->
 
     </div>
+    <!-- End of Page Wrapper -->
 
     <!-- Bootstrap core JavaScript -->
     <script src="/static/vendor/jquery/jquery.min.js"></script>
@@ -146,6 +142,49 @@
 
     <!-- Custom scripts for all pages -->
     <script src="/static/js/sb-admin-2.min.js"></script>
+
+    <script>
+        // Fungsi untuk mengonversi waktu ke objek Date
+        function convertToDateTime(dateString, timeString) {
+            return new Date(dateString + ' ' + timeString);
+        }
+
+        // Fungsi untuk mengonversi waktu UTC ke UTC+7
+        function convertToLocalTime(utcTime) {
+            const date = new Date(utcTime);
+            const localTime = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+            return localTime;
+        }
+
+        // Fungsi untuk menggabungkan tanggal dan waktu
+        function getFullDateTime(dateString, timeString) {
+            return new Date(dateString + "T" + timeString);
+        }
+
+        function checkAndShowButton(mkStartTime, mkEndTime, mkDate, mkId) {
+            const now = new Date();
+            const todayDateString = now.toISOString().split('T')[0];
+
+            if (mkDate && mkDate.includes(todayDateString)) {
+                const startTime = getFullDateTime(todayDateString, mkStartTime);
+                const endTime = getFullDateTime(todayDateString, mkEndTime);
+
+                if (now >= startTime && now <= endTime) {
+                    const button = document.getElementById("btn-absen-" + mkId);
+                    if (button) button.style.display = 'inline-block';
+                } else {
+                    const button = document.getElementById("btn-absen-" + mkId);
+                    if (button) button.style.display = 'none';
+                }
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            {% for mk in jadwal %}
+                checkAndShowButton("{{ mk.start_time }}", "{{ mk.end_time }}", "{{ mk.tanggal_pertemuan }}", "{{ mk.kode_mk }}");
+            {% endfor %}
+        });
+    </script>
 
 </body>
 

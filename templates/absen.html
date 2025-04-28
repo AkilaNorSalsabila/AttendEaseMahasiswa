@@ -6,46 +6,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Absensi Karyawan</title>
 
-    <!-- Custom fonts for this template -->
+    <!-- Custom fonts -->
     <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
-
-    <!-- Custom styles for this template -->
     <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
+    <style>
+        #video-container {
+            display: none;
+            margin-top: 20px;
+        }
+        iframe {
+            width: 100%;
+            max-width: 960px;
+            height: 540px;
+            border: 1px solid #ccc;
+        }
+        .alert {
+            display: none;
+        }
+    </style>
 </head>
 
 <body id="page-top">
-    
+
+    <!-- Sidebar -->
     <div id="wrapper">
-        
-         <!-- Sidebar -->
-         <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-            <!-- Sidebar - Brand -->
+        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
                 <div class="sidebar-brand-icon rotate-n-15">
                     <i class="fas fa-laugh-wink"></i>
                 </div>
-                <div class="sidebar-brand-text mx-3">Karyawan Absensi</div>
+                <div class="sidebar-brand-text mx-3">Karyawan Dashboard</div>
             </a>
 
-            <!-- Divider -->
             <hr class="sidebar-divider">
 
-            <!-- Sidebar Links -->
             <li class="nav-item">
                 <a class="nav-link" href="/karyawan_dashboard">
                     <i class="fas fa-home"></i>
-                    <span>Beranda</span>
+                    <span>Dashboard</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="/absen">
-                    <i class="fas fa-check-circle"></i>
-                    <span>Absen</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/rekap_absensi">
+                <a class="nav-link" href="/rekap_absensi_karyawan">
                     <i class="fas fa-list"></i>
                     <span>Rekap Absensi</span>
                 </a>
@@ -57,136 +59,113 @@
                 </a>
             </li>
         </ul>
-        <!-- End of Sidebar -->
 
-        <!-- Content Wrapper -->
-        <div id="content-wrapper" class="d-flex flex-column">
-            <div id="content">
-                <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
-                    <ul class="navbar-nav ml-auto">
-                        <li class="nav-item dropdown no-arrow">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button">
-                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ karyawan.name }}</span>
-                                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg">
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
+        <!-- Content -->
+        <div class="container">
+            <h1 class="text-center mt-5">Absensi Karyawan</h1>
 
-                <div class="container-fluid">
-                    <div class="alert alert-warning text-center">
-                        <strong>Perhatian:</strong> Absensi hanya diperbolehkan dalam waktu maksimal <strong>15 menit</strong> setelah waktu yang dijadwalkan.
-                    </div>
+            <!-- Data Karyawan dan Jadwal -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Data Karyawan</h5>
+                    <p class="card-text"><strong>Nama:</strong> {{ karyawan['name'] }}</p>
+                    <p class="card-text"><strong>ID Karyawan:</strong> {{ karyawan['id'] }}</p>
+                    <p class="card-text"><strong>ID Jadwal Kerja:</strong> {{ jadwal_id }}</p>
+                    <p class="card-text"><strong>Jam Masuk:</strong> {{ jam_masuk }}</p>
+                    <p class="card-text"><strong>Jam Pulang:</strong> {{ jam_pulang }}</p>
 
-                    <!-- Informasi Karyawan -->
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Informasi Karyawan</h6>
-                        </div>
-                        <div class="card-body">
-                            <p><strong>Nama:</strong> {{ karyawan.name }}</p>
-                            <p><strong>ID Karyawan:</strong> {{ karyawan.id }}</p>
-                            <p><strong>Jabatan:</strong> {{ karyawan.jabatan }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Form Absensi -->
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Form Absensi</h6>
-                        </div>
-                        <div class="card-body">
-                            <form id="absensi-form" method="POST">
-                                <div class="form-group">
-                                    <label for="jadwal_kerja">Jadwal Kerja:</label>
-                                    <select name="jadwal_kerja" id="jadwal_kerja" class="form-control" required>
-                                        <option value="" disabled selected>Pilih Jadwal Kerja</option>
-                                        {% for jadwal in jadwal_kerja_data %}
-                                        <option value="{{ jadwal.id }}">{{ jadwal.id }} - {{ jadwal.jam_masuk }} - {{ jadwal.jam_pulang }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="form-group mt-3">
-                                    <label for="minggu_ke">Minggu Ke:</label>
-                                    <select name="minggu_ke" id="minggu_ke" class="form-control" required>
-                                        <option value="" disabled selected>Pilih Minggu</option>
-                                        {% for i in range(1, 17) %}
-                                        <option value="minggu_ke_{{ i }}">Minggu ke-{{ i }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="button" id="start-abse" class="btn btn-primary">Mulai Absen</button>
-                            </form>
-            
-                            <!-- Display Status -->
-                            <div id="absen-status" class="hidden alert" role="alert">
-                                <span id="status-text"></span>
-                            </div>
-            
-                            <!-- Display Video Feed -->
-                            <div id="video-container" class="hidden">
-                                <iframe id="video-feed" width="100%" height="400" frameborder="0"></iframe>
-                            </div>
-                        </div>
-                    </div>
+                    <button class="btn btn-primary" id="start-absen">Mulai Absen</button>
                 </div>
-            
-                <script>
-                    document.getElementById('start-abse').addEventListener('click', function () {
-                        const jadwalKerja = document.getElementById('jadwal_kerja').value;
-                        const mingguKe = document.getElementById('minggu_ke').value;
-            
-                        if (jadwalKerja && mingguKe) {
-                            // Menyembunyikan form dan menampilkan video feed
-                            document.getElementById('absensi-form').classList.add('hidden');
-                            document.getElementById('video-container').classList.remove('hidden');
-            
-                            // Membuka stream video feed
-                            const userId = "{{ karyawan.id }}"; // Pastikan ini dipassing dari backend
-                            const id = "{{ karyawan.id }}"; // Pastikan ini dipassing dari backend
-                            const videoUrl = `/video_feed/${userId}/${jadwalKerja}/${mingguKe}/${id}`;
-                            
-                            document.getElementById('video-feed').src = videoUrl;
+            </div>
 
-            
-                            // Periksa status absensi setelah beberapa waktu
-                            setTimeout(() => {
-                                checkAbsensiStatus(userId, jadwalKerja, mingguKe);
-                            }, 5000); // Waktu tunggu untuk menyelesaikan absensi
-                        } else {
-                            alert("Pilih Jadwal Kerja dan minggu ke terlebih dahulu!");
+            <!-- Video Feed -->
+            <div id="video-container">
+                <h4>Video Feed Absensi</h4>
+                <iframe id="videoFeed" frameborder="0" allowfullscreen></iframe>
+            </div>
+
+            <!-- Status Absensi -->
+            <div id="absen-status" class="alert">
+                <span id="status-text"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const karyawan = {
+                "name": "{{ karyawan['name'] }}",
+                "id": "{{ karyawan['id'] }}"
+            };
+            const jadwalId = "{{ jadwal_id }}";
+            const jamMasuk = "{{ jam_masuk }}";
+            const jamPulang = "{{ jam_pulang }}";
+
+            // Handle tombol absen
+            $('#start-absen').click(function() {
+                startVideoFeed();
+            });
+
+            function startVideoFeed() {
+                const videoUrl = `/video_feed/${karyawan.id}/${jadwalId}/${jamMasuk}/${jamPulang}`;
+                console.log("Video feed URL:", videoUrl);
+
+                $('#videoFeed').attr('src', videoUrl);
+                $('#video-container').show();
+                $('#start-absen').hide();
+
+                checkStatusPeriodically();
+            }
+
+            function checkStatusPeriodically() {
+                const interval = setInterval(() => {
+                    checkAbsensiStatus(karyawan.id, jadwalId).then(status => {
+                        if (status === "success") {
+                            clearInterval(interval);
+                            $('#absen-status')
+                                .text('Absensi berhasil dicatat!')
+                                .removeClass('alert-warning alert-danger')
+                                .addClass('alert alert-success')
+                                .show();
                         }
                     });
-            
-                    function checkAbsensiStatus(user_id, jadwal_kerja, minggu_ke) {
-                        const url = `/check_absen_status?user_id=${user_id}&jadwal_kerja=${jadwal_kerja}&minggu_ke=${minggu_ke}`;
-            
-                        fetch(url)
-                            .then(response => response.json())
-                            .then(data => {
-                                const statusDiv = document.getElementById("absen-status");
-                                const statusText = document.getElementById("status-text");
-            
-                                statusDiv.className = "alert"; // Reset alert class
-                                statusDiv.classList.remove("hidden");
-            
-                                if (data.status === "success") {
-                                    statusText.textContent = "Absensi berhasil dicatat!";
-                                    statusDiv.classList.add("alert-success");
-                                } else if (data.status === "pending") {
-                                    statusText.textContent = "Absensi belum dicatat. Mohon ulangi.";
-                                    statusDiv.classList.add("alert-warning");
-                                } else {
-                                    statusText.textContent = "Terjadi kesalahan. Silakan hubungi admin.";
-                                    statusDiv.classList.add("alert-danger");
-                                }
-                            })
-                            .catch(err => {
-                                console.error("Error:", err);
-                                alert("Terjadi kesalahan dalam memeriksa status absensi.");
-                            });
+                }, 5000);
+            }
+
+            async function checkAbsensiStatus(user_id, jadwal_id) {
+                const url = `/check_absen_status_karyawan?user_id=${user_id}&jadwal_id=${jadwal_id}`;
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    console.log("Status Absensi:", data);
+                    if (data.status === "success") {
+                        return "success";
+                    } else if (data.status === "pending") {
+                        $('#absen-status')
+                            .text('Absensi belum tercatat. Mohon tunggu.')
+                            .removeClass('alert-success alert-danger')
+                            .addClass('alert alert-warning')
+                            .show();
+                    } else {
+                        $('#absen-status')
+                            .text('Terjadi kesalahan. Hubungi admin.')
+                            .removeClass('alert-success alert-warning')
+                            .addClass('alert alert-danger')
+                            .show();
                     }
-                </script>
-            </body>
-            
-            </html>
+                } catch (error) {
+                    console.error("Error checking attendance status:", error);
+                    $('#absen-status')
+                        .text('Terjadi error saat memeriksa absensi.')
+                        .removeClass('alert-success alert-warning')
+                        .addClass('alert alert-danger')
+                        .show();
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
