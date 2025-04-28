@@ -4,28 +4,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Absensi</title>
+    <title>Data Absensi Karyawan</title>
 
-    <!-- Custom fonts for this template -->
+    <!-- Fonts and Styles -->
     <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
-
-    <!-- Custom styles for this template -->
-    <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
-
-    <!-- Bootstrap core CSS -->
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 
     <style>
-        .modal-header, .modal-body, .modal-footer {
-            padding: 15px;
-        }
+        .modal-header, .modal-body, .modal-footer { padding: 15px; }
+        .badge { font-size: 0.9em; padding: 0.5em 0.75em; }
+        .table-responsive { overflow-x: auto; }
+        .img-thumbnail { max-width: 60px; cursor: pointer; transition: transform 0.2s; }
+        .img-thumbnail:hover { transform: scale(1.5); }
+        .filter-section .form-control { margin-bottom: 10px; }
     </style>
 </head>
 
 <body id="page-top">
 
-    <!-- Page Wrapper -->
     <div id="wrapper">
 
         <!-- Sidebar -->
@@ -36,146 +35,211 @@
                 </div>
                 <div class="sidebar-brand-text mx-3">Admin Dashboard</div>
             </a>
+
             <hr class="sidebar-divider">
-            <li class="nav-item">
-                <a class="nav-link" href="/dashboard">
-                    <i class="fas fa-database"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/dataset">
-                    <i class="fas fa-database"></i>
-                    <span>Tambah Dataset</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/train">
-                    <i class="fas fa-brain"></i>
-                    <span>Training Model</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/attendance">
-                    <i class="fas fa-list"></i>
-                    <span>Karyawan Attendance</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/admin/jadwal_kerja">
-                    <i class="fas fa-calendar"></i>
-                    <span>Jadwal Kerja</span>
-                </a>
-            </li>
-            <li class="nav-item active">
-                <a class="nav-link" href="/admin/penggajian">
-                    <i class="fas fa-calendar"></i>
-                    <span>Penggajian</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link logout" href="/logout">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </a>
-            </li>
+
+            <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="fas fa-home"></i><span>Beranda</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/dataset"><i class="fas fa-database"></i><span>Tambah Dataset</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/train"><i class="fas fa-brain"></i><span>Pelatihan Model</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-list"></i><span>Kehadiran Karyawan</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/admin/jadwal_kerja"><i class="fas fa-calendar"></i><span>Jadwal Kerja</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/pengganjian"><i class="fas fa-money-bill-wave"></i><span>Penggajian</span></a></li>
+            <li class="nav-item"><a class="nav-link logout" href="/logout"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a></li>
         </ul>
 
-        <!-- Content Wrapper -->
-        <div class="container-fluid">
-            <h1 class="h3 mb-4 text-gray-800 text-center">Data Kehadiran Karyawan</h1>
-        
-            <!-- Form Filter (Opsional) -->
-            <div class="card mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Filter Data</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <form method="POST" class="mb-3">
-                                <label>Jabatan:</label>
-                                <select name="jabatan" class="form-control" onchange="this.form.submit()">
-                                    <option value="">Semua Jabatan</option>
-                                    {% for jabatan in jabatan_list %}
-                                        <option value="{{ jabatan }}" {% if jabatan == jabatan %}selected{% endif %}>{{ jabatan }}</option>
-                                    {% endfor %}
-                                </select>
-                            </form>
+        <!-- Content -->
+        <div id="content-wrapper" class="d-flex flex-column">
+            <div id="content">
+                <div class="container-fluid">
+                    <h1 class="h3 mb-4 text-gray-800 text-center">Data Kehadiran Karyawan</h1>
+
+                    <!-- Filter Section -->
+                    <div class="card mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Filter Data</h6>
                         </div>
-                        <div class="col-md-6">
-                            <form method="POST">
-                                <input type="hidden" name="jabatan" value="{{ jabatan }}">
-                                <label>Jadwal Kerja:</label>
-                                <select name="jadwal_kerja" class="form-control" onchange="this.form.submit()">
-                                    <option value="">Semua Jadwal</option>
-                                    {% for jk in jadwal_kerja_list %}
-                                        <option value="{{ jk }}" {% if jk == jadwal_kerja %}selected{% endif %}>{{ jk }}</option>
-                                    {% endfor %}
-                                </select>
+                        <div class="card-body">
+                            <form method="POST" id="filterForm">
+                                <div class="row">
+                                    <!-- Jabatan Filter -->
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Jabatan:</label>
+                                        <select name="jabatan" class="form-control">
+                                            <option value="">Semua Jabatan</option>
+                                            {% for j in jabatan_list %}
+                                                <option value="{{ j }}" {% if j == jabatan %}selected{% endif %}>{{ j }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
+                                    <!-- Jadwal Kerja Filter -->
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Jadwal Kerja:</label>
+                                        <select name="jadwal_kerja" class="form-control">
+                                            <option value="">Semua Jadwal</option>
+                                            {% for jk in jadwal_kerja_list %}
+                                                <option value="{{ jk }}" {% if jk == jadwal_kerja %}selected{% endif %}>{{ jk }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
+                                    <!-- Nama Filter -->
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Nama Karyawan:</label>
+                                        <input type="text" name="nama" class="form-control" placeholder="Cari nama..." value="{{ nama_karyawan or '' }}">
+                                    </div>
+
+                                    <!-- Date Range Filter -->
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Tanggal:</label>
+                                        <div class="input-group">
+                                            <input type="date" name="tanggal_mulai" class="form-control" value="{{ tanggal_mulai or '' }}">
+                                            <span class="input-group-text">s/d</span>
+                                            <input type="date" name="tanggal_selesai" class="form-control" value="{{ tanggal_selesai or '' }}">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="text-center">
+                                    <button type="submit" class="btn btn-primary mr-2">
+                                        <i class="fas fa-filter"></i> Terapkan Filter
+                                    </button>
+                                    <a href="/attendance" class="btn btn-secondary">
+                                        <i class="fas fa-sync-alt"></i> Reset Filter
+                                    </a>
+                                </div>
                             </form>
                         </div>
                     </div>
-                </div>
-            </div>
-        
-            <!-- Tabel Absensi -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Daftar Kehadiran</h6>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        {% if attendance_list %}
-                        <table class="table table-bordered" width="100%" cellspacing="0">
-                            <thead>
-                                <tr>
-                                    <th>Kode Jadwal</th>
-                                    <th>Jadwal Kerja</th>
-                                    <th>Minggu</th>
-                                    <th>ID Karyawan</th>
-                                    <th>Nama</th>
-                                    <th>Status</th>
-                                    <th>Waktu</th>
-                                    <th>Bukti</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for a in attendance_list %}
-                                <tr>
-                                    <td>{{ a.kode_jadwal_kerja }}</td>
-                                    <td>{{ a.jadwal_kerja }}</td>
-                                    <td>{{ a.minggu_ke }}</td>
-                                    <td>{{ a.id_karyawan }}</td>
-                                    <td>{{ a.nama }}</td>
-                                    <td>
-                                        <span class="badge {% if a.status == 'Hadir' %}bg-success{% else %}bg-danger{% endif %}">
-                                            {{ a.status }}
-                                        </span>
-                                    </td>
-                                    <td>{{ a.timestamp if a.timestamp != '-' else '-' }}</td>
-                                    <td class="text-center">
-                                        {% if a.image_url %}
-                                        <img src="{{ a.image_url }}" width="50" class="img-thumbnail">
-                                        {% else %}
-                                        -
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        {% else %}
-                        <div class="alert alert-info">Tidak ada data kehadiran</div>
-                        {% endif %}
+
+                    <!-- Attendance Table -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="m-0 font-weight-bold text-primary">Daftar Kehadiran</h6>
+                            <button class="btn btn-sm btn-success" id="exportBtn">
+                                <i class="fas fa-file-export"></i> Export
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                {% if attendance_list %}
+                                <table class="table table-bordered table-hover" id="dataTable">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>ID Jadwal</th>
+                                            <th>Jadwal Kerja</th>
+                                            <th>ID Karyawan</th>
+                                            <th>Nama</th>
+                                            <th>Status</th>
+                                            <th>Waktu</th>
+                                            <th>Bukti</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for a in attendance_list %}
+                                        <tr>
+                                            <td>{{ a.kode_jadwal_kerja }}</td>
+                                            <td>{{ a.jadwal_kerja }}</td>
+                                            <td>{{ a.id_karyawan }}</td>
+                                            <td>{{ a.nama }}</td>
+                                            <td class="text-center">
+                                                <span class="badge {% if a.status == 'Hadir' %}bg-success{% elif a.status == 'Izin' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                                    {{ a.status }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if a.timestamp and a.timestamp != '-' %}
+                                                    {{ a.timestamp.split(' ')[0] }}<br>
+                                                    <small class="text-muted">{{ a.timestamp.split(' ')[1] }}</small>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-center">
+                                                {% if a.image_url %}
+                                                <a href="#" data-bs-toggle="modal" data-bs-target="#imageModal" data-image="{{ a.image_url }}" data-name="{{ a.nama }}" data-date="{{ a.timestamp }}">
+                                                    <img src="{{ a.image_url }}" width="50" class="img-thumbnail">
+                                                </a>
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                                {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="fas fa-info-circle fa-2x mb-3"></i><br>
+                                    <h5>Tidak ada data kehadiran ditemukan</h5>
+                                    <p>Silakan coba filter dengan kriteria lain</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
+
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Image Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Bukti Kehadiran</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="modalImage" src="" class="img-fluid" alt="Bukti Kehadiran">
+                    <div class="mt-3">
+                        <p><strong>Nama:</strong> <span id="modalName"></span></p>
+                        <p><strong>Waktu:</strong> <span id="modalDate"></span></p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <a id="downloadBtn" href="#" class="btn btn-primary" download>
+                        <i class="fas fa-download"></i> Unduh
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
     <script src="/static/vendor/jquery/jquery.min.js"></script>
     <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-</body>
+    <script src="/static/vendor/jquery-easing/jquery.easing.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="/static/js/sb-admin-2.min.js"></script>
 
+    <script>
+        $(document).ready(function() {
+            $('#dataTable').DataTable({
+                "order": [[5, "desc"]],
+                "language": {
+                    "url": "//cdn.datatables.net/plug-ins/1.11.5/i18n/Indonesian.json"
+                },
+                "responsive": true
+            });
+
+            $('#imageModal').on('show.bs.modal', function (event) {
+                var button = $(event.relatedTarget);
+                $('#modalImage').attr('src', button.data('image'));
+                $('#modalName').text(button.data('name'));
+                $('#modalDate').text(button.data('date') || '-');
+                $('#downloadBtn').attr('href', button.data('image'));
+            });
+
+            $('#exportBtn').click(function() {
+                alert('Fitur export akan segera hadir!');
+            });
+        });
+    </script>
+
+</body>
 </html>
