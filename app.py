@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, jsonify, session
 import os
+from datetime import datetime
 import cv2
 import numpy as np
 import base64
@@ -31,13 +32,7 @@ dataset_path = 'DataSet'
 
 # Inisialisasi Firebase
 # Inisialisasi Firebase
-# Inisialisasi Firebase
-cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
 
-initialize_app(cred, {
-    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
-    'storageBucket': 'facerecognition-c8264.appspot.com'  # Menambahkan storageBucket
-})
 # Load model hasil fine-tuning
 model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
 
@@ -749,6 +744,103 @@ def admin_attendance():
                         jadwal_kerja_list=jadwal_kerja_list,
                         jabatan=jabatan,
                         jadwal_kerja=jadwal_kerja)
+
+@app.route('/admin/penggajian', methods=['GET', 'POST'])
+def admin_penggajian():
+    if 'user' not in session:
+        return redirect('/login_admin')
+
+    # Inisialisasi variabel
+    nama_karyawan = request.form.get('nama_karyawan', '')
+    tanggal_mulai = request.form.get('tanggal_mulai', '')
+    tanggal_selesai = request.form.get('tanggal_selesai', '')
+    attendance_list = []
+
+    # Ambil data dari Firebase
+    attendance_ref = db.reference('attendance')
+    attendance_data = attendance_ref.get() or {}
+
+    employees_ref = db.reference('employees')
+    employees_data = employees_ref.get() or {}
+
+    # 🔵 Buat daftar nama karyawan dari employees dan attendance (gabungan)
+    nama_karyawan_set = set()
+
+    # Dari employees
+    for emp_id, emp_info in employees_data.items():
+        nama = emp_info.get('nama', '-')
+        if nama != "-":
+            nama_karyawan_set.add(nama)
+
+    # Dari attendance
+    for jadwal_db, minggu_data in attendance_data.items():
+        for minggu_ke, employee_data in minggu_data.items():
+            for emp_id, records in employee_data.items():
+                for record_id, detail in records.items():
+                    nama_raw = detail.get("name", "-")
+                    if nama_raw and nama_raw != "-":
+                        nama = nama_raw.split('-')[-1].strip()
+                        nama_karyawan_set.add(nama)
+
+    nama_karyawan_list = sorted(list(nama_karyawan_set))  # Urutkan biar rapi
+
+    # 🔵 Fungsi untuk mengubah string tanggal menjadi objek datetime
+    def str_to_date(date_str):
+        try:
+            return datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return None
+
+    # 🔵 Konversi tanggal mulai dan selesai ke datetime
+    tanggal_mulai_obj = str_to_date(tanggal_mulai) if tanggal_mulai else None
+    tanggal_selesai_obj = str_to_date(tanggal_selesai) if tanggal_selesai else None
+
+    # 🔵 Proses data absensi
+    for jadwal_db, minggu_data in attendance_data.items():
+        for minggu_ke, employee_data in minggu_data.items():
+            for emp_id, records in employee_data.items():
+                for record_id, detail in records.items():
+                    nama_raw = detail.get("name", "-")
+                    nama = nama_raw.split('-')[-1].strip() if nama_raw and nama_raw != "-" else "-"
+
+                    timestamp_str = detail.get("timestamp", "-")
+                    
+                    # Convert timestamp to datetime object
+                    try:
+                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S') if timestamp_str != '-' else None
+                    except ValueError:
+                        timestamp = None
+
+                    # Filter berdasarkan nama karyawan (kalau ada)
+                    if nama_karyawan and nama != nama_karyawan:
+                        continue
+                    
+                    # Filter berdasarkan rentang tanggal (kalau ada)
+                    if tanggal_mulai_obj and timestamp and timestamp < tanggal_mulai_obj:
+                        continue
+                    if tanggal_selesai_obj and timestamp and timestamp > tanggal_selesai_obj:
+                        continue
+
+                    status = detail.get("status", "Hadir")
+                    gaji = 100000 if status == "Hadir" else 0
+                    minggu_number = re.sub(r'\D', '', minggu_ke)
+
+                    attendance_list.append({
+                        "id_karyawan": emp_id,
+                        "nama": nama,
+                        "status": status,
+                        "timestamp": timestamp_str,
+                        "minggu_ke": minggu_number,
+                        "gaji": gaji
+                    })
+
+    # 🔵 Urutkan berdasarkan minggu dan nama
+    attendance_list = sorted(attendance_list, key=lambda x: (x['minggu_ke'], x['nama']))
+
+    return render_template('penggajian.html',
+                           attendance_list=attendance_list,
+                           nama_karyawan_list=nama_karyawan_list,
+                           nama_karyawan=nama_karyawan)
 
 # @app.route('/students/edit/<student_id>', methods=['POST'])
 # def edit_student(student_id):
