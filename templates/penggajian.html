@@ -67,7 +67,7 @@
                     <span>Jadwal Kerja</span>
                 </a>
             </li>
-            <li class="nav-item active">
+            <li class="nav-item">
                 <a class="nav-link" href="/admin/penggajian">
                     <i class="fas fa-calendar"></i>
                     <span>Penggajian</span>
@@ -83,42 +83,39 @@
 
         <!-- Content Wrapper -->
         <div class="container-fluid">
-            <h1 class="h3 mb-4 text-gray-800 text-center">Data Kehadiran Karyawan</h1>
-        
-            <!-- Form Filter (Opsional) -->
+            <h1 class="h3 mb-4 text-gray-800 text-center">Data Gaji Karyawan</h1>
+
+            <!-- Form Filter Nama Karyawan + Tanggal -->
             <div class="card mb-4">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">Filter Data</h6>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <form method="POST" class="mb-3">
-                                <label>Jabatan:</label>
-                                <select name="jabatan" class="form-control" onchange="this.form.submit()">
-                                    <option value="">Semua Jabatan</option>
-                                    {% for jabatan in jabatan_list %}
-                                        <option value="{{ jabatan }}" {% if jabatan == jabatan %}selected{% endif %}>{{ jabatan }}</option>
-                                    {% endfor %}
-                                </select>
-                            </form>
+                    <form method="POST" action="/admin/penggajian" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label for="nama_karyawan" class="form-label">Nama Karyawan:</label>
+                            <select name="nama_karyawan" id="nama_karyawan" class="form-control">
+                                <option value="">Semua Karyawan</option>
+                                {% for nama in nama_karyawan_list %}
+                                    <option value="{{ nama }}" {% if nama == nama_karyawan %}selected{% endif %}>{{ nama }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div class="col-md-6">
-                            <form method="POST">
-                                <input type="hidden" name="jabatan" value="{{ jabatan }}">
-                                <label>Jadwal Kerja:</label>
-                                <select name="jadwal_kerja" class="form-control" onchange="this.form.submit()">
-                                    <option value="">Semua Jadwal</option>
-                                    {% for jk in jadwal_kerja_list %}
-                                        <option value="{{ jk }}" {% if jk == jadwal_kerja %}selected{% endif %}>{{ jk }}</option>
-                                    {% endfor %}
-                                </select>
-                            </form>
+                        <div class="col-md-3">
+                            <label for="tanggal_mulai" class="form-label">Tanggal Mulai:</label>
+                            <input type="date" name="tanggal_mulai" id="tanggal_mulai" value="{{ tanggal_mulai }}" class="form-control">
                         </div>
-                    </div>
+                        <div class="col-md-3">
+                            <label for="tanggal_selesai" class="form-label">Tanggal Selesai:</label>
+                            <input type="date" name="tanggal_selesai" id="tanggal_selesai" value="{{ tanggal_selesai }}" class="form-control">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">Filter</button>
+                        </div>
+                    </form>
                 </div>
             </div>
-        
+
             <!-- Tabel Absensi -->
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
@@ -130,22 +127,16 @@
                         <table class="table table-bordered" width="100%" cellspacing="0">
                             <thead>
                                 <tr>
-                                    <th>Kode Jadwal</th>
-                                    <th>Jadwal Kerja</th>
-                                    <th>Minggu</th>
                                     <th>ID Karyawan</th>
                                     <th>Nama</th>
                                     <th>Status</th>
                                     <th>Waktu</th>
-                                    <th>Bukti</th>
+                                    <th>Gaji</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for a in attendance_list %}
                                 <tr>
-                                    <td>{{ a.kode_jadwal_kerja }}</td>
-                                    <td>{{ a.jadwal_kerja }}</td>
-                                    <td>{{ a.minggu_ke }}</td>
                                     <td>{{ a.id_karyawan }}</td>
                                     <td>{{ a.nama }}</td>
                                     <td>
@@ -154,13 +145,7 @@
                                         </span>
                                     </td>
                                     <td>{{ a.timestamp if a.timestamp != '-' else '-' }}</td>
-                                    <td class="text-center">
-                                        {% if a.image_url %}
-                                        <img src="{{ a.image_url }}" width="50" class="img-thumbnail">
-                                        {% else %}
-                                        -
-                                        {% endif %}
-                                    </td>
+                                    <td>Rp {{ '{:,.0f}'.format(a.gaji).replace(',', '.') }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -168,11 +153,10 @@
                         {% else %}
                         <div class="alert alert-info">Tidak ada data kehadiran</div>
                         {% endif %}
-                    </div>
+                    </div>                    
                 </div>
             </div>
         </div>
-    </div>
 
     <script src="/static/vendor/jquery/jquery.min.js"></script>
     <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
