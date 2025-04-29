@@ -129,7 +129,6 @@
                                 <tr>
                                     <th>ID Karyawan</th>
                                     <th>Nama</th>
-                                    <th>Status</th>
                                     <th>Waktu</th>
                                     <th>Gaji</th>
                                 </tr>
@@ -139,11 +138,6 @@
                                 <tr>
                                     <td>{{ a.id_karyawan }}</td>
                                     <td>{{ a.nama }}</td>
-                                    <td>
-                                        <span class="badge {% if a.status == 'Hadir' %}bg-success{% else %}bg-danger{% endif %}">
-                                            {{ a.status }}
-                                        </span>
-                                    </td>
                                     <td>{{ a.timestamp if a.timestamp != '-' else '-' }}</td>
                                     <td>Rp {{ '{:,.0f}'.format(a.gaji).replace(',', '.') }}</td>
                                 </tr>
