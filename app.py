@@ -31,13 +31,7 @@ dataset_path = 'DataSet'
 
 # Inisialisasi Firebase
 # Inisialisasi Firebase
-# Inisialisasi Firebase
-cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
 
-initialize_app(cred, {
-    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
-    'storageBucket': 'facerecognition-c8264.appspot.com'  # Menambahkan storageBucket
-})
 # Load model hasil fine-tuning
 model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
 
@@ -98,41 +92,122 @@ def login_karyawan():
 
     return render_template('login_karyawan.html')
 
+from datetime import datetime, timedelta
+
+from datetime import datetime, timedelta
+
+from datetime import datetime, timedelta
+import pytz
+from datetime import datetime
+
+from datetime import datetime, timedelta
+import pytz
+from flask import render_template, session, flash, redirect
+from firebase_admin import db
+
 @app.route('/karyawan_dashboard')
 def karyawan_dashboard():
     if 'karyawan' not in session:
         flash('Silakan login terlebih dahulu', 'warning')
         return redirect('/login_karyawan')
 
-    karyawan = session['karyawan']  # Data karyawan
-    jabatan = karyawan.get('jabatan', '')  # Mengambil jabatan dari session
-
-    # Ambil daftar jadwal kerja berdasarkan jabatan
+    karyawan = session['karyawan']
+    jabatan = karyawan.get('jabatan', '')
+    karyawan_id = karyawan.get('id', '')
     jadwal_kerja_data = []
     jadwal_ref = db.reference(f'jadwal_kerja/{jabatan}')
     jadwal_data = jadwal_ref.get()
 
-    # Menambahkan log untuk debugging
-    print(f"[DEBUG] Data jadwal kerja yang diterima: {jadwal_data}")
+    # Ambil data absensi hari ini
+    today = datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%Y-%m-%d')
+    absensi_ref = db.reference('attendance_karyawan')
+    absensi_data = absensi_ref.get()
 
-    # Pastikan jadwal_data memiliki data dan proses dengan aman
-    if isinstance(jadwal_data, dict):  # Memastikan bahwa jadwal_data adalah dictionary
+    sudah_absen = {}
+    total_absen_per_jadwal = {}
+
+    if absensi_data:
+        for jadwal_id, jadwal_val in absensi_data.items():
+            if jadwal_id and isinstance(jadwal_val, dict):
+                user_absen_data = jadwal_val.get(karyawan_id, {})
+                for _, detail in user_absen_data.items():
+                    timestamp = detail.get('timestamp', '')
+                    if today in timestamp:
+                        status = detail.get('status', 'Tidak Hadir')
+                        sudah_absen[jadwal_id] = status
+                        # Hitung jumlah absensi per jadwal
+                        if jadwal_id not in total_absen_per_jadwal:
+                            total_absen_per_jadwal[jadwal_id] = 0
+                        total_absen_per_jadwal[jadwal_id] += 1
+
+    now = datetime.now()
+
+    if isinstance(jadwal_data, dict):
         for k, v in jadwal_data.items():
-            if isinstance(v, dict):  # Memastikan v adalah dictionary
-                jadwal_kerja_data.append({
-                    'id': k,
-                    'name': v.get('name', 'Tidak Ada Nama'),
-                    'jam_masuk': v.get('jam_masuk', 'Tidak Diketahui'),
-                    'jam_pulang': v.get('jam_pulang', 'Tidak Diketahui'),
-                    'status': v.get('status', 'Tidak Hadir')  # Menambahkan status jika ada
-                })
-            else:
-                print(f"[WARNING] Data jadwal kerja tidak dalam format yang diharapkan: {v}")
-    else:
-        print("[ERROR] Data jadwal kerja kosong atau tidak dalam format yang benar.")
+            jam_masuk = v.get('jam_masuk', '00:00')
+            jam_pulang = v.get('jam_pulang', '23:59')
+            toleransi_masuk = 15  # Menit toleransi
 
-    # Kirim data karyawan dan jadwal_kerja_data ke template
-    return render_template('karyawan_dashboard.html', karyawan=karyawan, jadwal_kerja_data=jadwal_kerja_data)
+            jam_masuk_dt = datetime.strptime(jam_masuk, "%H:%M")
+            jam_pulang_dt = datetime.strptime(jam_pulang, "%H:%M")
+
+            waktu_sekarang = now.time()
+            batas_awal = jam_masuk_dt.time()
+            batas_akhir = (jam_masuk_dt + timedelta(minutes=toleransi_masuk)).time()
+
+            # Status absensi diambil berdasarkan apakah sudah absen atau belum
+            status = sudah_absen.get(k, 'Tidak Hadir')
+            is_hadir = status == 'Hadir'
+
+            is_dalam_jam_absen = batas_awal <= waktu_sekarang <= batas_akhir
+            is_dalam_jam_pulang = waktu_sekarang >= jam_pulang_dt.time()
+
+            # Tentukan status "Hadir" jika sudah absen 2 kali pada jadwal tersebut
+            if total_absen_per_jadwal.get(k, 0) >= 2:
+                status = 'Hadir'
+            else:
+                status = 'Tidak Hadir'
+
+            # Perbaikan bagian tombol absen
+            show_button_masuk = not is_hadir and is_dalam_jam_absen
+            show_button_pulang = is_hadir and is_dalam_jam_pulang
+
+            jadwal_kerja_data.append({
+                'id': k,
+                'jam_masuk': jam_masuk_dt.time(),  # Convert jam_masuk to time object
+                'jam_pulang': jam_pulang_dt.time(),
+                'status': status,
+                'is_terlambat': not is_dalam_jam_absen and not is_hadir,
+                'show_button_masuk': show_button_masuk,  # Menampilkan tombol masuk hanya jika belum absen
+                'show_button_pulang': show_button_pulang  # Menampilkan tombol pulang hanya jika sudah absen masuk
+            })
+
+    return render_template('karyawan_dashboard.html',
+                           karyawan=karyawan,
+                           jadwal_kerja_data=jadwal_kerja_data,
+                           waktu_sekarang=waktu_sekarang)
+
+# Pengecekan Absensi Hari Ini
+def is_hadir_today(jadwal_id, karyawan_id):
+    # Ambil data absensi berdasarkan jadwal_id dan karyawan_id dari Firebase
+    today = datetime.today().date()
+    
+    # Loop untuk memeriksa absensi karyawan pada setiap jadwal
+    absensi_ref = db.reference('attendance_karyawan')
+    absensi_data = absensi_ref.get()
+    
+    if absensi_data:
+        for jadwal_id_key, jadwal_val in absensi_data.items():
+            if jadwal_id_key == jadwal_id:
+                user_absen_data = jadwal_val.get(karyawan_id, {})
+                for _, detail in user_absen_data.items():
+                    timestamp = detail.get('timestamp', '')
+                    if today.strftime('%Y-%m-%d') in timestamp:
+                        if detail.get('status', '') == 'Hadir':
+                            return True
+    return False
+
+
 
 #Register Admin
 @app.route('/register', methods=['GET', 'POST'])
@@ -168,6 +243,63 @@ def dashboard():
     if 'user' not in session:
         return redirect('/')
     return render_template('dashboard.html')
+
+from firebase_admin import db
+
+@app.route('/kasbon/add', methods=['POST'])
+def add_kasbon():
+    if 'user' not in session:
+        return redirect('/')
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Data tidak ditemukan.'})
+
+    try:
+        employee_id = data['employeeId']
+        name = data['name']
+        jabatan = data['jabatan']
+        kasbon_to_add = int(data['kasbon'])
+
+        # Mendapatkan data kasbon yang sudah ada
+        kasbon_ref = db.reference(f'kasbon/{employee_id}')
+        current_kasbon_data = kasbon_ref.get()
+
+        if current_kasbon_data:
+            # Jika kasbon sudah ada, tambahkan jumlah kasbon yang baru
+            current_kasbon = current_kasbon_data.get('kasbon', 0)
+            updated_kasbon = current_kasbon + kasbon_to_add
+        else:
+            # Jika kasbon belum ada, set kasbon pertama kali
+            updated_kasbon = kasbon_to_add
+
+        # Update data kasbon yang telah diperbarui
+        kasbon_ref.update({
+            'name': name,
+            'jabatan': jabatan,
+            'kasbon': updated_kasbon
+        })
+
+        return jsonify({'status': 'success', 'message': 'Kasbon berhasil disimpan.'})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Gagal menyimpan kasbon: {str(e)}'})
+
+
+# Endpoint untuk mendapatkan data kasbon
+@app.route('/kasbon/<employee_id>', methods=['GET'])
+def get_kasbon(employee_id):
+    if 'user' not in session:
+        return redirect('/')
+
+    kasbon_ref = db.reference(f'kasbon/{employee_id}')
+    kasbon_data = kasbon_ref.get()
+
+    if kasbon_data:
+        return jsonify(kasbon_data)
+    else:
+        return jsonify({'status': 'error', 'message': 'Data kasbon tidak ditemukan.'})
+
 
 import time
 
@@ -211,20 +343,15 @@ def gen(user_id, jadwal_id, jam_masuk, jam_pulang):
                 confidence = float(np.max(pred[0]))
                 detected_idx = str(np.argmax(pred[0]) + 1)
 
-                # Ubah detected_idx jadi format user_id (misal "KRY-01")
-                detected_user_id = f"KRY-{detected_idx.zfill(2)}"  # Misal 1 jadi "KRY-01"
-
+                detected_user_id = f"KRY-{detected_idx.zfill(2)}"
                 detected_label = labels.get(detected_idx, 'Unknown')
 
-                # Visualisasi
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                 cv2.putText(frame, f"{detected_user_id} ({confidence*100:.1f}%)", (x, y-10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                # Print Expected vs Detected
                 print(f"[INFO] Expected: {user_id} | Detected: {detected_user_id} | Confidence: {confidence:.2f}")
 
-                # Cek apakah sama dan confidence cukup
                 if detected_user_id == user_id and confidence >= 0.75 and not attendance_logged:
                     timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
                     filename = f"att_{user_id}_{jadwal_id}_{timestamp}.jpg"
@@ -239,15 +366,28 @@ def gen(user_id, jadwal_id, jam_masuk, jam_pulang):
                     blob.make_public()
                     image_url = blob.public_url
 
-                    ref = db.reference(f"attendance_karyawan/{jadwal_id}/{user_id}")
+                    # ✅ Ambil data nama dan jabatan dari Firebase
+                    employee_ref = db.reference(f"employees/{user_id}")
+                    employee_data = employee_ref.get()
 
+                    if not employee_data:
+                        print(f"[ERROR] Data karyawan dengan ID {user_id} tidak ditemukan.")
+                        continue
+
+                    employee_name = employee_data.get('name', 'Unknown')
+                    employee_jabatan = employee_data.get('jabatan', 'Unknown')
+
+                    # ✅ Simpan absensi ke Firebase
+                    ref = db.reference(f"attendance_karyawan/{jadwal_id}/{user_id}")
                     data = {
                         'id_jadwal': jadwal_id,
                         'jam_masuk': jam_masuk,
                         'jam_pulang': jam_pulang,
                         'timestamp': timestamp,
                         'image_url': image_url,
-                        'status': 'Hadir'
+                        'status': 'Hadir',
+                        'name': employee_name,
+                        'jabatan': employee_jabatan
                     }
                     ref.push(data)
                     print("[SUCCESS] Absensi tercatat di Firebase:", data)
@@ -273,31 +413,46 @@ def video_feed(user_id, jadwal_id, jam_masuk, jam_pulang):
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Route untuk halaman absen karyawan
+# Route untuk halaman absen karyawan
 @app.route('/absen', methods=['GET', 'POST'])
 def absen():
     if 'karyawan' not in session:
         return redirect('/login_karyawan')
 
     karyawan = session['karyawan']
+    user_id = karyawan.get('id')
+    jadwal_id = request.args.get('jadwal_id')
+    jam_masuk = request.args.get('jam_masuk')
+    jam_pulang = request.args.get('jam_pulang')
 
-    if request.method == 'GET':
-        jadwal_id = request.args.get('jadwal_id')
-        jam_masuk = request.args.get('jam_masuk')
-        jam_pulang = request.args.get('jam_pulang')
+    if not all([jadwal_id, jam_masuk, jam_pulang]):
+        return "Parameter jadwal tidak lengkap", 400
 
-        if not all([jadwal_id, jam_masuk, jam_pulang]):
-            return "Parameter jadwal tidak lengkap", 400
+    if request.method == 'POST':
+        # Lakukan pengecekan wajah dan absensi
+        attendance_logged = False
+        # Simulasi proses absensi di kamera
+        timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+        filename = f"att_{user_id}_{jadwal_id}_{timestamp}.jpg"
+        filepath = os.path.join(capture_dir, filename)
 
-        return render_template('absen.html',
-                               karyawan=karyawan,
-                               jadwal_id=jadwal_id,
-                               jam_masuk=jam_masuk,
-                               jam_pulang=jam_pulang)
+        # Jika wajah terdeteksi dan absensi tercatat
+        if attendance_logged:
+            # Update status absensi karyawan menjadi "Hadir" setelah berhasil absen
+            attendance_ref = db.reference(f"attendance_karyawan/{jadwal_id}/{user_id}")
+            attendance_ref.update({
+                'status': 'Hadir',
+                'jam_masuk': jam_masuk,
+                'timestamp': timestamp
+            })
 
-    elif request.method == 'POST':
-       
+            flash("Absen masuk berhasil!", "success")
+            return redirect(url_for('karyawan_dashboard'))  # Kembali ke halaman dashboard setelah absen
 
-            return jsonify({'status': 'error', 'message': 'Terjadi kesalahan saat menyimpan absensi.'}), 500
+        return jsonify({'status': 'error', 'message': 'Terjadi kesalahan saat menyimpan absensi.'}), 500
+
+    # Jika metode GET, tampilkan halaman absensi
+    return render_template('absen.html', karyawan=karyawan, jadwal_id=jadwal_id, jam_masuk=jam_masuk, jam_pulang=jam_pulang)
 
 # Route untuk memeriksa status absensi karyawan
 @app.route('/check_absen_status_karyawan', methods=['GET'])
@@ -1026,123 +1181,81 @@ def delete_jadwal(golongan, jadwal_id):
         print(f"[ERROR] Gagal menghapus jadwal {jadwal_id} dari golongan {golongan}: {e}")
 
     return redirect('/admin/jadwal_mata_kuliah')
+def generate_new_schedule_id():
+    ref = db.reference('jadwal_kerja')
+    all_data = ref.get() or {}
 
-# Admin Melihat dan Mengelola Jadwal Kerja
+    nums = []
+    for jabatan in all_data:
+        for key in all_data[jabatan]:
+            if key.startswith("JD-") and key[3:].isdigit():
+                nums.append(int(key[3:]))
+
+    new_num = max(nums) + 1 if nums else 1
+    return f'JD-{new_num:03d}'
+
 @app.route('/admin/jadwal_kerja', methods=['GET', 'POST'])
 def admin_jadwal_kerja():
-    if 'user' not in session:
-        return redirect('/')
-
-    # Referensi ke Firebase Realtime Database
-    jadwal_ref = db.reference('jadwal_kerja')
-    edit_data = None
-    message = None
+    ref = db.reference('jadwal_kerja')
 
     if request.method == 'POST':
-        action = request.form.get('action')
+        action = request.form['action']
 
-        # Tambah jadwal baru
         if action == 'add':
-            jabatan = request.form.get('jabatan')
-            id_jadwal = request.form.get('id_jadwal')
-            jam_masuk = request.form.get('jam_masuk')
-            jam_pulang = request.form.get('jam_pulang')
-            toleransi = request.form.get('toleransi', 15)
+            jabatan = request.form['jabatan']
+            new_id = generate_new_schedule_id()
+            data = {
+                'id_jadwal': new_id,
+                'jabatan': jabatan,
+                'jam_masuk': request.form['jam_masuk'],
+                'jam_pulang': request.form['jam_pulang'],
+                'toleransi_keterlambatan': int(request.form['toleransi']),
+            }
+            ref.child(jabatan).child(new_id).set(data)
 
-            if not all([jabatan, id_jadwal, jam_masuk, jam_pulang]):
-                message = "Semua field wajib diisi!"
-            else:
-                try:
-                    toleransi = int(toleransi)
-                    jadwal_ref.child(jabatan).child(id_jadwal).set({
-                        'id_jadwal': id_jadwal,
-                        'jam_masuk': jam_masuk,
-                        'jam_pulang': jam_pulang,
-                        'toleransi_keterlambatan': toleransi
-                    })
-                    message = "Jadwal kerja berhasil ditambahkan!"
-                except ValueError:
-                    message = "Toleransi harus berupa angka!"
-
-        # Persiapan edit jadwal
-        elif action == 'prepare_edit':
-            jabatan = request.form.get('edit_jabatan')
-            id_jadwal = request.form.get('edit_id')
-
-            if jabatan and id_jadwal:
-                edit_ref = jadwal_ref.child(jabatan).child(id_jadwal)
-                data = edit_ref.get()
-                if data:
-                    edit_data = {
-                        'jabatan': jabatan,
-                        'id_jadwal': id_jadwal,
-                        'jam_masuk': data.get('jam_masuk', ''),
-                        'jam_pulang': data.get('jam_pulang', ''),
-                        'toleransi_keterlambatan': data.get('toleransi_keterlambatan', 15)
-                    }
-                else:
-                    message = "Data tidak ditemukan!"
-            else:
-                message = "Data tidak lengkap untuk proses edit!"
-
-        # Update data jadwal
-        elif action == 'update':
-            jabatan = request.form.get('jabatan')
-            id_jadwal = request.form.get('id_jadwal')
-            jam_masuk = request.form.get('jam_masuk')
-            jam_pulang = request.form.get('jam_pulang')
-            toleransi = request.form.get('toleransi', 15)
-
-            if not all([jabatan, id_jadwal, jam_masuk, jam_pulang]):
-                message = "Semua field wajib diisi!"
-            else:
-                try:
-                    toleransi = int(toleransi)
-                    jadwal_ref.child(jabatan).child(id_jadwal).update({
-                        'jam_masuk': jam_masuk,
-                        'jam_pulang': jam_pulang,
-                        'toleransi_keterlambatan': toleransi
-                    })
-                    message = "Jadwal berhasil diperbarui!"
-                except ValueError:
-                    message = "Toleransi harus berupa angka!"
-
-        # Hapus data jadwal
         elif action == 'delete':
-            jabatan = request.form.get('del_jabatan')
-            id_jadwal = request.form.get('del_id')
+            jabatan = request.form['jabatan']
+            del_id = request.form['del_id']
+            ref.child(jabatan).child(del_id).delete()
 
-            if jabatan and id_jadwal:
-                jadwal_ref.child(jabatan).child(id_jadwal).delete()
-                message = "Jadwal berhasil dihapus!"
-            else:
-                message = "Data tidak lengkap untuk proses hapus!"
+        elif action == 'prepare_edit':
+            jabatan = request.form['jabatan']
+            edit_id = request.form['edit_id']
+            edit_data = ref.child(jabatan).child(edit_id).get()
+            all_data = ref.get() or {}
+            jadwal_list = []
+            for jab, jads in all_data.items():
+                for item in jads.values():
+                    jadwal_list.append(item)
+            return render_template('admin_jadwal_kerja.html',
+                                   data_list=jadwal_list,
+                                   edit_data=edit_data,
+                                   edit_jabatan=jabatan)
 
-    # Ambil semua data jadwal dari Firebase
-    jadwal_data = jadwal_ref.get() or {}
+        elif action == 'update':
+            jabatan = request.form['jabatan']
+            id_jadwal = request.form['id_jadwal']
+            ref.child(jabatan).child(id_jadwal).update({
+                'jabatan': jabatan,
+                'jam_masuk': request.form['jam_masuk'],
+                'jam_pulang': request.form['jam_pulang'],
+                'toleransi_keterlambatan': int(request.form['toleransi']),
+            })
 
-    data_list = []
-    for jabatan, jadwal_list in jadwal_data.items():
-        if isinstance(jadwal_list, dict):
-            for id_jadwal, jadwal in jadwal_list.items():
-                data_list.append({
-                    'jabatan': jabatan,
-                    'id_jadwal': jadwal.get('id_jadwal', id_jadwal),
-                    'jam_masuk': jadwal.get('jam_masuk', ''),
-                    'jam_pulang': jadwal.get('jam_pulang', ''),
-                    'toleransi_keterlambatan': jadwal.get('toleransi_keterlambatan', 0)
-                })
+        return redirect('/admin/jadwal_kerja')
 
-    return render_template(
-        'admin_jadwal_kerja.html',
-        data_list=data_list,
-        message=message,
-        edit_data=edit_data
-    )
+    # GET
+    all_data = ref.get() or {}
+    jadwal_list = []
+    for jab, jads in all_data.items():
+        for item in jads.values():
+            jadwal_list.append(item)
 
-
-
-
+    return render_template('admin_jadwal_kerja.html',
+                           data_list=jadwal_list,
+                           edit_data=None,
+                           edit_jabatan=None,
+                           new_id_jadwal=generate_new_schedule_id())
 # Admin Mengatur Jadwal Absensi
 @app.route('/set_absensi', methods=['GET', 'POST'])
 def set_absensi():

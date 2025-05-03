@@ -116,23 +116,29 @@
                 $('#video-container').show();
                 $('#start-absen').hide();
 
-                checkStatusPeriodically();
+                setTimeout(() => {
+                    checkStatusPeriodically();
+                }, 10000); // 10 detik delay awal sebelum mulai cek status
+
             }
 
             function checkStatusPeriodically() {
-                const interval = setInterval(() => {
-                    checkAbsensiStatus(karyawan.id, jadwalId).then(status => {
-                        if (status === "success") {
-                            clearInterval(interval);
-                            $('#absen-status')
-                                .text('Absensi berhasil dicatat!')
-                                .removeClass('alert-warning alert-danger')
-                                .addClass('alert alert-success')
-                                .show();
-                        }
-                    });
-                }, 5000);
-            }
+            const interval = setInterval(() => {
+                checkAbsensiStatus(karyawan.id, jadwalId).then(status => {
+                    if (status === "success") {
+                        clearInterval(interval);
+                        $('#absen-status')
+                            .text('Absensi berhasil dicatat!')
+                            .removeClass('alert-warning alert-danger')
+                            .addClass('alert alert-success')
+                            .show();
+                        // Redirect to the dashboard after success
+                        window.location.href = '/karyawan_dashboard'; // Change to your actual dashboard URL
+                    }
+                });
+            }, 5000); // 10 seconds delay before checking again
+        }
+
 
             async function checkAbsensiStatus(user_id, jadwal_id) {
                 const url = `/check_absen_status_karyawan?user_id=${user_id}&jadwal_id=${jadwal_id}`;

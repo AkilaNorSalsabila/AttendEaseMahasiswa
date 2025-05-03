@@ -57,14 +57,14 @@
 
                 <!-- Topbar -->
                 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
-                    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
+                    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3" aria-label="Toggle Sidebar">
                         <i class="fa fa-bars"></i>
                     </button>
                     <ul class="navbar-nav ml-auto">
                         <li class="nav-item dropdown no-arrow">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                 <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ karyawan.name }}</span>
-                                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg">
+                                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg" alt="Profile Picture">
                             </a>
                         </li>
                     </ul>
@@ -89,7 +89,8 @@
                                     <th>Jam Masuk</th>
                                     <th>Jam Pulang</th>
                                     <th>Status</th>
-                                    <th>Absen</th>
+                                    <th>Absen Masuk</th>
+                                    <th>Absen Pulang</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -106,21 +107,56 @@
                                             <span class="badge badge-danger">Tidak Hadir</span>
                                             {% endif %}
                                         </td>
+                                        <!-- Kolom Absen Masuk -->
                                         <td>
-                                            {% if not jadwal.is_terlambat %}
-                                            <a href="/absen?jadwal_id={{ jadwal.id }}&jam_masuk={{ jadwal.jam_masuk }}&jam_pulang={{ jadwal.jam_pulang }}" class="btn btn-primary">Mulai Absen</a>
+                                            {% if jadwal.status == 'Hadir' %}
+                                                <!-- Tampilkan "Hadir" dengan warna hijau jika status sudah Hadir -->
+                                                <span class="badge badge-success">Hadir</span>
                                             {% else %}
-                                                <span class="badge badge-warning">Terlambat</span>
+                                                {% if jadwal.has_absen_masuk %}
+                                                    <!-- Tampilkan "Sudah Absen Masuk" dengan warna hijau -->
+                                                    <span class="badge badge-success">Sudah Absen Masuk</span>
+                                                {% else %}
+                                                    {% if jadwal.show_button_masuk %}
+                                                        <a href="/absen?jadwal_id={{ jadwal.id }}&jam_masuk={{ jadwal.jam_masuk }}&jam_pulang={{ jadwal.jam_pulang }}" class="btn btn-primary" id="btn-absen-masuk-{{ jadwal.id }}">Mulai Absen Masuk</a>
+                                                    {% else %}
+                                                        {% if waktu_sekarang < jadwal.jam_masuk %}
+                                                            <span class="text-muted">Belum waktunya absen</span>
+                                                        {% elif jadwal.is_terlambat %}
+                                                            <span class="badge badge-warning">Terlambat</span>
+                                                        {% else %}
+                                                            <span class="text-muted">Sudah absen</span>
+                                                        {% endif %}
+                                                    {% endif %}
+                                                {% endif %}
                                             {% endif %}
                                         </td>
                                         
+
+
+
+                                        <!-- Kolom Absen Pulang -->
+                                        <td>
+                                            {% if jadwal.status == 'Hadir' %}
+                                                <span class="badge badge-success">Hadir</span>
+                                            {% else %}
+                                                {% if jadwal.show_button_pulang %}
+                                                    <a href="/absen?jadwal_id={{ jadwal.id }}&jam_masuk={{ jadwal.jam_masuk }}&jam_pulang={{ jadwal.jam_pulang }}" class="btn btn-primary" id="btn-absen-pulang-{{ jadwal.id }}">Mulai Absen Pulang</a>
+                                                {% else %}
+                                                    <span class="text-muted" id="belum-absen-pulang-{{ jadwal.id }}">Belum waktunya</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
                                     </tr>
                                     {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="6" class="text-center">Tidak ada jadwal pertemuan untuk hari ini.</td>
+                                    </tr>
+                                {% endif %}
                             </tbody>
                         </table>
-                    {% else %}
-                        <p class="text-center">Tidak ada jadwal pertemuan untuk hari ini.</p>
-                    {% endif %}
+                    </div>
                 </div>
                 <!-- /.container-fluid -->
 
@@ -144,24 +180,13 @@
     <script src="/static/js/sb-admin-2.min.js"></script>
 
     <script>
-        // Fungsi untuk mengonversi waktu ke objek Date
-        function convertToDateTime(dateString, timeString) {
-            return new Date(dateString + ' ' + timeString);
-        }
-
-        // Fungsi untuk mengonversi waktu UTC ke UTC+7
-        function convertToLocalTime(utcTime) {
-            const date = new Date(utcTime);
-            const localTime = new Date(date.getTime() + (7 * 60 * 60 * 1000));
-            return localTime;
-        }
-
-        // Fungsi untuk menggabungkan tanggal dan waktu
+        // Convert to full date time and localize the time
         function getFullDateTime(dateString, timeString) {
             return new Date(dateString + "T" + timeString);
         }
 
-        function checkAndShowButton(mkStartTime, mkEndTime, mkDate, mkId) {
+        // Function to check the schedule time and display appropriate buttons
+        function checkAndShowButton(mkStartTime, mkEndTime, mkDate, mkId, isAbsenMasuk) {
             const now = new Date();
             const todayDateString = now.toISOString().split('T')[0];
 
@@ -169,21 +194,31 @@
                 const startTime = getFullDateTime(todayDateString, mkStartTime);
                 const endTime = getFullDateTime(todayDateString, mkEndTime);
 
-                if (now >= startTime && now <= endTime) {
-                    const button = document.getElementById("btn-absen-" + mkId);
-                    if (button) button.style.display = 'inline-block';
-                } else {
-                    const button = document.getElementById("btn-absen-" + mkId);
-                    if (button) button.style.display = 'none';
+                const buttonMasuk = document.getElementById("btn-absen-masuk-" + mkId);
+                const buttonPulang = document.getElementById("btn-absen-pulang-" + mkId);
+                const absenPulangText = document.getElementById("belum-absen-pulang-" + mkId);
+
+                // Check for Absen Masuk (Start Absen)
+                if (isAbsenMasuk) {
+                    if (now < startTime) {
+                        buttonMasuk && (buttonMasuk.style.display = 'none');
+                    } else if (now >= startTime && now <= endTime) {
+                        buttonMasuk && (buttonMasuk.style.display = 'inline-block');
+                    } else {
+                        buttonMasuk && (buttonMasuk.style.display = 'none');
+                    }
+                }
+                // Check for Absen Pulang (End Absen)
+                else {
+                    if (now < endTime) {
+                        buttonPulang && (buttonPulang.style.display = 'none');
+                        absenPulangText && (absenPulangText.style.display = 'inline-block');
+                    } else {
+                        buttonPulang && (buttonPulang.style.display = 'none');
+                    }
                 }
             }
         }
-
-        document.addEventListener("DOMContentLoaded", function () {
-            {% for mk in jadwal %}
-                checkAndShowButton("{{ mk.start_time }}", "{{ mk.end_time }}", "{{ mk.tanggal_pertemuan }}", "{{ mk.kode_mk }}");
-            {% endfor %}
-        });
     </script>
 
 </body>

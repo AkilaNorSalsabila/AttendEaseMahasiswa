@@ -6,16 +6,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
 
-    <!-- Custom fonts for this template -->
-    <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
-
-    <!-- Custom styles for this template -->
+    <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,700,900" rel="stylesheet">
     <link href="/static/css/sb-admin-2.min.css?v={{ timestamp }}" rel="stylesheet">
 
+    <style>
+        .modal { display: none; position: fixed; z-index: 9999; padding-top: 100px; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 400px; }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
+        .close:hover, .close:focus { color: black; text-decoration: none; cursor: pointer; }
+    </style>
+
     <script>
+        let selectedEmployee = {};
+
+        function openKasbonModal(employeeId, name, jabatan) {
+            selectedEmployee = { id: employeeId, name: name, jabatan: jabatan };
+            document.getElementById('kasbonModal').style.display = 'block';
+            document.getElementById('kasbonAmount').value = '';
+        }
+
+        function closeKasbonModal() {
+            document.getElementById('kasbonModal').style.display = 'none';
+        }
+
+        function tambahKasbon() {
+            const kasbonValue = document.getElementById('kasbonAmount').value;
+
+            if (!kasbonValue || isNaN(kasbonValue) || parseInt(kasbonValue) < 0) {
+                alert("Masukkan jumlah kasbon yang valid.");
+                return;
+            }
+
+            fetch('/kasbon/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    employeeId: selectedEmployee.id,
+                    name: selectedEmployee.name,
+                    jabatan: selectedEmployee.jabatan,
+                    kasbon: parseInt(kasbonValue)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Kasbon berhasil ditambahkan.');
+                    document.getElementById(`kasbon-${selectedEmployee.id}`).value = kasbonValue;
+                    closeKasbonModal();
+                } else {
+                    alert(`Gagal menambahkan kasbon: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan saat menambahkan kasbon.');
+            });
+        }
+
         function loadEmployees() {
-            const loader = `<tr><td colspan="5" style="text-align: center;">Memuat data...</td></tr>`;
+            const loader = `<tr><td colspan="6" style="text-align: center;">Memuat data...</td></tr>`;
             const tableBody = document.getElementById('employees-table-body');
             tableBody.innerHTML = loader;
 
@@ -24,9 +74,8 @@
                 .then(data => {
                     if (data.status === 'success') {
                         tableBody.innerHTML = '';
-
                         if (data.data.length === 0) {
-                            tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Tidak ada data karyawan.</td></tr>`;
+                            tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center;">Tidak ada data karyawan.</td></tr>`;
                         } else {
                             data.data.forEach(employee => {
                                 const row = `
@@ -35,23 +84,30 @@
                                         <td>${employee.name}</td>
                                         <td>${employee.images_count}</td>
                                         <td>${employee.jabatan !== '-' ? employee.jabatan : employee.semester}</td>
+                                        <td><input type="number" class="form-control form-control-sm" id="kasbon-${employee.id}" readonly></td>
                                         <td>
-                                            <button class="btn btn-warning btn-sm" onclick="editEmployee('${employee.id}', '${employee.name}', '${employee.jabatan}')">Edit</button>
-
+                                            <button class="btn btn-success btn-sm mb-1" onclick="openKasbonModal('${employee.id}', '${employee.name}', '${employee.jabatan}')">Tambah Kasbon</button>
+                                            <button class="btn btn-warning btn-sm mb-1" onclick="editEmployee('${employee.id}', '${employee.name}', '${employee.jabatan}')">Edit</button>
                                             <button class="btn btn-danger btn-sm" onclick="deleteEmployee('${employee.id}')">Hapus</button>
                                         </td>
                                     </tr>`;
                                 tableBody.innerHTML += row;
+
+                                fetch(`/kasbon/${employee.id}`)
+                                    .then(response => response.json())
+                                    .then(kasbonData => {
+                                        if (kasbonData && kasbonData.kasbon) {
+                                            document.getElementById(`kasbon-${employee.id}`).value = kasbonData.kasbon;
+                                        }
+                                    });
                             });
                         }
                     } else {
-                        console.error("Gagal memuat data karyawan:", data.message);
-                        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Gagal memuat data karyawan.</td></tr>';
+                        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Gagal memuat data karyawan.</td></tr>';
                     }
                 })
-                .catch(err => {
-                    console.error("Error saat memuat data karyawan:", err.message);
-                    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Terjadi kesalahan jaringan.</td></tr>';
+                .catch(() => {
+                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Terjadi kesalahan jaringan.</td></tr>';
                 });
         }
 
@@ -63,10 +119,7 @@
                 fetch(`/employees/edit/${employeeId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: newName,
-                        jabatan: newJabatan
-                    })
+                    body: JSON.stringify({ name: newName, jabatan: newJabatan })
                 })
                 .then(response => response.json())
                 .then(data => {
@@ -76,16 +129,9 @@
                     } else {
                         alert(`Gagal mengedit karyawan: ${data.message}`);
                     }
-                })
-                .catch(err => {
-                    console.error("Error saat mengedit karyawan:", err.message);
-                    alert('Terjadi kesalahan saat mengedit data karyawan.');
                 });
-            } else {
-                alert("Nama dan jabatan tidak boleh kosong.");
             }
         }
-
 
         function deleteEmployee(employeeId) {
             if (confirm('Yakin ingin menghapus karyawan ini?')) {
@@ -98,10 +144,6 @@
                         } else {
                             alert(`Gagal menghapus karyawan: ${data.message}`);
                         }
-                    })
-                    .catch(err => {
-                        console.error("Error saat menghapus karyawan:", err.message);
-                        alert('Terjadi kesalahan saat menghapus data karyawan.');
                     });
             }
         }
@@ -111,94 +153,69 @@
 </head>
 
 <body id="page-top">
-
     <div id="wrapper">
 
         <!-- Sidebar -->
         <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
-                <div class="sidebar-brand-icon rotate-n-15">
-                    <i class="fas fa-laugh-wink"></i>
-                </div>
+                <div class="sidebar-brand-icon rotate-n-15"><i class="fas fa-laugh-wink"></i></div>
                 <div class="sidebar-brand-text mx-3">Admin Dashboard</div>
             </a>
-    
             <hr class="sidebar-divider">
-    
-            <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="fas fa-database"></i><span>Beranda</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="fas fa-home"></i><span>Beranda</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/dataset"><i class="fas fa-database"></i><span>Tambah Dataset</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/train"><i class="fas fa-brain"></i><span>Pelatihan Model</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-list"></i><span>Kehadiran Karyawan</span></a></li>
             <li class="nav-item"><a class="nav-link" href="/admin/jadwal_kerja"><i class="fas fa-calendar"></i><span>Jadwal Kerja</span></a></li>
-            <li class="nav-item active">
-                <a class="nav-link" href="/admin/penggajian">
-                    <i class="fas fa-calendar"></i>
-                    <span>Penggajian</span>
-                </a>
-            </li>
+            <li class="nav-item active"><a class="nav-link" href="/admin/penggajian"><i class="fas fa-money-bill"></i><span>Penggajian</span></a></li>
             <li class="nav-item"><a class="nav-link logout" href="/logout"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a></li>
-    
         </ul>
 
-        <!-- Content Wrapper -->
+        <!-- Content -->
         <div id="content-wrapper" class="d-flex flex-column">
             <div id="content">
 
-                <!-- Topbar -->
-                <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 shadow">
-                    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
-                        <i class="fa fa-bars"></i>
-                    </button>
-                    <ul class="navbar-nav ml-auto">
-                        <li class="nav-item dropdown no-arrow">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown">
-                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">Admin</span>
-                                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg">
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
-
-                <!-- Page Content -->
                 <div class="container-fluid">
                     <h1 class="h3 mb-4 text-gray-800">Welcome, Admin!</h1>
 
-                    <div class="row">
-                        <div class="col-lg-12">
-                            <div class="card shadow mb-4">
-                                <div class="card-header py-3">
-                                    <h6 class="m-0 font-weight-bold text-primary">Daftar Karyawan</h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered" width="100%" cellspacing="0">
-                                            <thead>
-                                                <tr>
-                                                    <th>ID Karyawan</th>
-                                                    <th>Nama</th>
-                                                    <th>Jumlah Gambar</th>
-                                                    <th>Jabatan</th>
-                                                    <th>Aksi</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="employees-table-body">
-                                                <tr>
-                                                    <td colspan="5" style="text-align: center;">Memuat data...</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Daftar Karyawan</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered" width="100%" cellspacing="0">
+                                    <thead>
+                                        <tr>
+                                            <th>ID Karyawan</th>
+                                            <th>Nama</th>
+                                            <th>Jumlah Gambar</th>
+                                            <th>Jabatan</th>
+                                            <th>Kasbon</th>
+                                            <th>Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="employees-table-body">
+                                        <tr><td colspan="6" style="text-align: center;">Memuat data...</td></tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
 
-                </div>
+                    <!-- Modal -->
+                    <div id="kasbonModal" class="modal">
+                        <div class="modal-content">
+                            <span class="close" onclick="closeKasbonModal()">&times;</span>
+                            <h5>Tambah Kasbon</h5>
+                            <input type="number" id="kasbonAmount" class="form-control mb-3" placeholder="Jumlah Kasbon (Rp)">
+                            <button class="btn btn-primary btn-block" onclick="tambahKasbon()">Simpan</button>
+                        </div>
+                    </div>
 
+                </div>
             </div>
         </div>
-
     </div>
 
     <!-- Scripts -->
@@ -206,7 +223,5 @@
     <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/static/vendor/jquery-easing/jquery.easing.min.js"></script>
     <script src="/static/js/sb-admin-2.min.js"></script>
-
 </body>
-
 </html>
