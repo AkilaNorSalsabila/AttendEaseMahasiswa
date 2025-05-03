@@ -15,7 +15,6 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import re  # Tambahkan baris ini
 from flask import Flask, render_template, request, redirect, session, jsonify
-# ... import lainnya yang sudah ada
 from tensorflow.keras.models import load_model
 
 
@@ -839,71 +838,52 @@ upload_dataset_to_firebase()
 
 #     return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan untuk NIM dan minggu yang diberikan.'}), 404
 #KARYAWAN ATTENDANCE
-@app.route('/attendance', methods=['GET', 'POST'])
-def admin_attendance():
-    if 'user' not in session:
-        return redirect('/login_admin')
+@app.route("/attendance", methods=["GET", "POST"])
+def attendance():
+    ref = db.reference("attendance_karyawan")
+    snapshot = ref.get()
 
-    # Inisialisasi variabel
-    jabatan = request.form.get('jabatan', '')
-    jadwal_kerja = request.form.get('jadwal_kerja', '')
     attendance_list = []
 
-    # Ambil semua data yang diperlukan
-    jadwal_ref = db.reference('jadwal_kerja')
-    jadwal_data = jadwal_ref.get() or {}
-    jabatan_list = list(jadwal_data.keys())
+    if snapshot:
+        for id_jadwal, karyawan_data in snapshot.items():
+            for id_karyawan, records in karyawan_data.items():
+                for record_id, details in records.items():
+                    # parsing tanggal dari timestamp
+                    try:
+                        dt_object = datetime.strptime(details.get("timestamp", ""), "%Y-%m-%dT%H-%M-%S")
+                        tanggal = dt_object.strftime("%Y-%m-%d")
+                    except:
+                        tanggal = "Invalid Date"
 
-    # Ambil data attendance dan employees sekaligus
-    attendance_ref = db.reference('attendance')
-    attendance_data = attendance_ref.get() or {}
-    
-    employees_ref = db.reference('employees')
-    employees_data = employees_ref.get() or {}
-
-    # Jika ada filter jabatan, ambil jadwal kerja yang sesuai
-    jadwal_kerja_list = []
-    if jabatan:
-        jadwal_kerja_list = list(jadwal_data.get(jabatan, {}).keys())
-    else:
-        # Jika tidak ada filter, ambil semua jadwal kerja
-        for jb in jabatan_list:
-            jadwal_kerja_list.extend(list(jadwal_data.get(jb, {}).keys()))
-
-    # Proses data absensi (tanpa filter awal)
-    for jadwal_db, minggu_data in attendance_data.items():
-        # Skip jika ada filter jadwal_kerja dan tidak match
-        if jadwal_kerja and jadwal_db != jadwal_kerja:
-            continue
-            
-        for minggu_ke, employee_data in minggu_data.items():
-            for emp_id, records in employee_data.items():
-                for record_id, detail in records.items():
-                    # Skip jika ada filter jabatan dan tidak match
-                    if jabatan and detail.get("jabatan") != jabatan:
-                        continue
-                        
-                    minggu_number = re.sub(r'\D', '', minggu_ke)
                     attendance_list.append({
-                        "kode_jadwal_kerja": detail.get("kode_jadwal_kerja", "-"),
-                        "jadwal_kerja": jadwal_db,
-                        "minggu_ke": int(minggu_number),
-                        "id_karyawan": emp_id,
-                        "nama": detail.get("name", "-").split('-')[-1].strip(),
-                        "status": detail.get("status", "Hadir"),
-                        "timestamp": detail.get("timestamp", "-"),
-                        "image_url": detail.get("image_url")
+                        "id_karyawan": id_karyawan,
+                        "nama_karyawan":details.get("name", "-"),  # Kalau mau nama asli, update firebase
+                        "tanggal": tanggal,
+                        "jam_masuk": details.get("jam_masuk", "-"),
+                        "jam_pulang": details.get("jam_pulang", "-"),
+                        "status": ("Hadir" if details.get("jam_masuk") != "Tidak Diketahui" and details.get("jam_pulang") != "Tidak Diketahui"
+                                   else "Tidak Hadir"),
+                        "image_url": details.get("image_url", ""),
                     })
 
-    # Urutkan data
-    attendance_list = sorted(attendance_list, key=lambda x: (x['minggu_ke'], x['nama']))
+    # Filtering
+    if request.method == "POST":
+        id_karyawan_filter = request.form.get("id_karyawan")
+        tanggal_filter = request.form.get("tanggal")
+        status_filter = request.form.get("status")
 
-    return render_template('attendance.html',
-                        attendance_list=attendance_list,
-                        jabatan_list=jabatan_list,
-                        jadwal_kerja_list=jadwal_kerja_list,
-                        jabatan=jabatan,
-                        jadwal_kerja=jadwal_kerja)
+        if id_karyawan_filter:
+            attendance_list = [a for a in attendance_list if id_karyawan_filter.lower() in a['id_karyawan'].lower()]
+        if tanggal_filter:
+            attendance_list = [a for a in attendance_list if a['tanggal'] == tanggal_filter]
+        if status_filter and status_filter != "Semua":
+            attendance_list = [a for a in attendance_list if a['status'] == status_filter]
+
+    return render_template("attendance.html", attendance_list=attendance_list)
+
+if __name__ == "__main__":
+    app.run(debug=True)
 @app.route('/admin/penggajian', methods=['GET', 'POST'])
 def admin_penggajian():
     if 'user' not in session:
