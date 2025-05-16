@@ -22,36 +22,51 @@
             padding: 15px;
         }
     </style>
-    <!-- Tambahkan di bagian <style> -->
+        <!-- Tambahkan di bagian <style> -->
         <style>
-            #bottomBar {
-                transition: all 0.3s ease;
-                z-index: 1000;
-            }
-            
-            #bottomBar .bg-success {
-                padding: 0.75rem 1.5rem;
-            }
-            
-            /* Animasi saat muncul/hilang */
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(20px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            
-            @keyframes fadeOut {
-                from { opacity: 1; transform: translateY(0); }
-                to { opacity: 0; transform: translateY(20px); }
-            }
-            
-            #bottomBar[style*="display: flex"] {
-                animation: fadeIn 0.3s forwards;
-            }
-            
-            #bottomBar[style*="display: none"] {
-                animation: fadeOut 0.3s forwards;
-            }
-        </style>
+        /* Style untuk bottom bar */
+        #bottomBar {
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        #bottomBar .bg-success, 
+        #bottomBar .bg-danger {
+            padding: 0.75rem 1.5rem;
+        }
+        
+        /* Animasi saat muncul/hilang */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(20px); }
+        }
+        
+        #bottomBar[style*="display: flex"] {
+            animation: fadeIn 0.3s forwards;
+        }
+        
+        #bottomBar[style*="display: none"] {
+            animation: fadeOut 0.3s forwards;
+        }
+        
+        /* Style untuk tabel di modal */
+        #modalAmbilGaji .table {
+            margin-bottom: 0;
+        }
+        
+        #modalAmbilGaji .card {
+            margin-bottom: 1rem;
+        }
+        
+        #modalAmbilGaji .card-header {
+            padding: 0.5rem 1rem;
+        }
+    </style>
         <!-- Firebase JS -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -215,49 +230,144 @@
                                 </tr>
                                 {% endfor %}
                                 <script>
-                                    // Checkbox Select All
-                                    document.getElementById('checkAll').addEventListener('change', function () {
-                                        const checkboxes = document.querySelectorAll('.check-item');
-                                        checkboxes.forEach(cb => cb.checked = this.checked);
-                                    });
-
                                     // Fungsi format Rupiah
                                     function formatRupiah(angka) {
                                         return 'Rp ' + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                                     }
 
-                                    // Fungsi update bottom bar
-                                    function updateAksiTerpilih() {
-                                        const checkboxes = document.querySelectorAll('.check-item:checked');
-                                        let total = 0;
-                                        let count = checkboxes.length;
-                                        
-                                        checkboxes.forEach(cb => {
-                                            const gaji = parseInt(cb.getAttribute('data-gaji')) || 0;
-                                            total += gaji;
-                                        });
-                                        
-                                        const bottomBar = document.getElementById('bottomBar');
-                                        const totalGajiText = document.getElementById('totalGajiBottom');
-                                        const jumlahText = document.getElementById('jumlahTerpilih');
-                                        
-                                        if (count > 0) {
-                                            bottomBar.style.display = 'flex';
-                                            totalGajiText.textContent = formatRupiah(total);
-                                            jumlahText.textContent = count;
-                                        } else {
-                                            bottomBar.style.display = 'none';
+                                    // Variabel global untuk menyimpan data yang dipilih
+                                    let selectedEmployeeData = {
+                                        id: null,
+                                        nama: null,
+                                        items: [],
+                                        totalGaji: 0
+                                    };
+
+                                    // Fungsi untuk memuat data kasbon dari Firebase - UPDATED
+                                    async function loadKasbonData(employeeId) {
+                                        try {
+                                            console.log("Mencoba memuat kasbon untuk ID:", employeeId); // Debug log
+                                            
+                                            const kasbonRef = firebase.database().ref('kasbon/' + employeeId);
+                                            const snapshot = await kasbonRef.once('value');
+                                            const kasbonData = snapshot.val();
+                                            
+                                            console.log("Data kasbon dari Firebase:", kasbonData); // Debug log
+
+                                            // Jika data kasbon ditemukan
+                                            if (kasbonData && kasbonData.kasbon !== undefined) {
+                                                return {
+                                                    total: parseInt(kasbonData.kasbon) || 0,
+                                                    items: [{
+                                                        tanggal: kasbonData.tanggal || '-',
+                                                        jumlah: parseInt(kasbonData.kasbon) || 0,
+                                                        keterangan: 'Kasbon ' + (kasbonData.name || employeeId)
+                                                    }]
+                                                };
+                                            }
+                                            
+                                            return { total: 0, items: [] };
+                                        } catch (error) {
+                                            console.error("Error loading kasbon data:", error);
+                                            return { total: 0, items: [] };
                                         }
                                     }
-                                    
-                                    // Pasang event listener ke setiap checkbox saat halaman dimuat
-                                    document.addEventListener('DOMContentLoaded', function() {
-                                        // Untuk checkbox individual
+
+                                    // Fungsi utama untuk update bottom bar
+                                    function updateAksiTerpilih() {
+                                        try {
+                                            const checkboxes = document.querySelectorAll('.check-item:checked');
+                                            const bottomBar = document.getElementById('bottomBar');
+                                            
+                                            if (!bottomBar) {
+                                                console.error("Bottom bar element not found!");
+                                                return;
+                                            }
+
+                                            let total = 0;
+                                            let count = checkboxes.length;
+                                            let currentId = null;
+                                            let invalidSelection = false;
+                                            
+                                            // Reset selected data
+                                            selectedEmployeeData = {
+                                                id: null,
+                                                nama: null,
+                                                items: [],
+                                                totalGaji: 0
+                                            };
+                                            
+                                            checkboxes.forEach(cb => {
+                                                const row = cb.closest('tr');
+                                                if (!row) return;
+                                                
+                                                const id_karyawan = row.cells[1].textContent;
+                                                const nama = row.cells[2].textContent;
+                                                const gaji = parseInt(cb.dataset.gaji) || 0;
+                                                
+                                                // Validasi ID karyawan
+                                                if (currentId === null) {
+                                                    currentId = id_karyawan;
+                                                    selectedEmployeeData.id = id_karyawan;
+                                                    selectedEmployeeData.nama = nama;
+                                                } else if (currentId !== id_karyawan) {
+                                                    invalidSelection = true;
+                                                }
+                                                
+                                                // Simpan data
+                                                selectedEmployeeData.items.push({
+                                                    tanggal: row.cells[3].textContent.trim(),
+                                                    status: row.cells[5].textContent.trim(),
+                                                    gaji: gaji
+                                                });
+                                                
+                                                total += gaji;
+                                            });
+                                            
+                                            selectedEmployeeData.totalGaji = total;
+                                            
+                                            const totalGajiText = document.getElementById('totalGajiBottom');
+                                            const jumlahText = document.getElementById('jumlahTerpilih');
+                                            const ambilGajiBtn = bottomBar.querySelector('button');
+                                            
+                                            if (count > 0) {
+                                                bottomBar.style.display = 'flex';
+                                                
+                                                if (invalidSelection) {
+                                                    bottomBar.querySelector('.bg-success').classList.remove('bg-success');
+                                                    bottomBar.querySelector('.rounded-pill').classList.add('bg-danger');
+                                                    jumlahText.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Pilih ID karyawan sama';
+                                                    totalGajiText.textContent = '';
+                                                    if (ambilGajiBtn) {
+                                                        ambilGajiBtn.disabled = true;
+                                                        ambilGajiBtn.style.display = 'none';
+                                                    }
+                                                } else {
+                                                    bottomBar.querySelector('.rounded-pill').classList.remove('bg-danger');
+                                                    bottomBar.querySelector('.rounded-pill').classList.add('bg-success');
+                                                    jumlahText.textContent = `${count} Item (${selectedEmployeeData.nama})`;
+                                                    totalGajiText.textContent = formatRupiah(total);
+                                                    if (ambilGajiBtn) {
+                                                        ambilGajiBtn.disabled = false;
+                                                        ambilGajiBtn.style.display = 'block';
+                                                    }
+                                                }
+                                            } else {
+                                                bottomBar.style.display = 'none';
+                                            }
+                                        } catch (error) {
+                                            console.error("Error in updateAksiTerpilih:", error);
+                                        }
+                                    }
+
+                                    // Inisialisasi event listeners - UPDATED
+                                    function initEventListeners() {
+                                        // Checkbox individual
                                         document.querySelectorAll('.check-item').forEach(cb => {
                                             cb.addEventListener('change', updateAksiTerpilih);
                                         });
                                         
-                                        // Untuk checkbox "Pilih Semua"
+                                        // Checkbox "Pilih Semua"
                                         const checkAll = document.getElementById('checkAll');
                                         if (checkAll) {
                                             checkAll.addEventListener('change', function() {
@@ -268,7 +378,140 @@
                                             });
                                         }
                                         
-                                        // Inisialisasi awal
+                                        // Tombol Ambil Gaji - UPDATED with better error handling
+                                        document.addEventListener('click', async function(e) {
+                                            if (e.target.closest('#bottomBar button')) {
+                                                if (!selectedEmployeeData.id) {
+                                                    alert('Pilih karyawan terlebih dahulu');
+                                                    return;
+                                                }
+                                                
+                                                console.log("Tombol Ambil Gaji diklik untuk ID:", selectedEmployeeData.id); // Debug log
+                                                
+                                                try {
+                                                    // Isi data modal
+                                                    document.getElementById('modalIdKaryawan').textContent = selectedEmployeeData.id;
+                                                    document.getElementById('modalNamaKaryawan').textContent = selectedEmployeeData.nama;
+                                                    
+                                                    // Isi detail gaji
+                                                    const detailGajiBody = document.getElementById('detailGaji');
+                                                    if (detailGajiBody) {
+                                                        detailGajiBody.innerHTML = '';
+                                                        selectedEmployeeData.items.forEach(item => {
+                                                            detailGajiBody.innerHTML += `
+                                                                <tr>
+                                                                    <td>${item.tanggal}</td>
+                                                                    <td>${item.status}</td>
+                                                                    <td>${formatRupiah(item.gaji)}</td>
+                                                                </tr>
+                                                            `;
+                                                        });
+                                                        document.getElementById('totalGajiModal').textContent = formatRupiah(selectedEmployeeData.totalGaji);
+                                                    }
+                                                    
+                                                    // Load dan tampilkan data kasbon - UPDATED
+                                                    const kasbonData = await loadKasbonData(selectedEmployeeData.id);
+                                                    console.log("Kasbon data yang akan ditampilkan:", kasbonData); // Debug log
+                                                    
+                                                    const detailKasbonBody = document.getElementById('detailKasbon');
+                                                    detailKasbonBody.innerHTML = '';
+                                                    
+                                                    if (kasbonData.items.length === 0) {
+                                                        detailKasbonBody.innerHTML = `
+                                                            <tr>
+                                                                <td colspan="3" class="text-center">Tidak ada data kasbon</td>
+                                                            </tr>
+                                                        `;
+                                                    } else {
+                                                        const item = kasbonData.items[0];
+                                                        detailKasbonBody.innerHTML = `
+                                                            <tr>
+                                                                <td>${item.tanggal}</td>
+                                                                <td>${formatRupiah(item.jumlah)}</td>
+                                                                <td>${item.keterangan}</td>
+                                                            </tr>
+                                                        `;
+                                                    }
+                                                    
+                                                    // Update total kasbon dan sisa gaji
+                                                    document.getElementById('totalKasbonModal').textContent = formatRupiah(kasbonData.total);
+                                                    document.getElementById('sisaGajiModal').textContent = 
+                                                        `Sisa Gaji: ${formatRupiah(selectedEmployeeData.totalGaji - kasbonData.total)}`;
+                                                    
+                                                    // Tampilkan modal
+                                                    const modal = new bootstrap.Modal(document.getElementById('modalAmbilGaji'));
+                                                    modal.show();
+                                                    
+                                                } catch (error) {
+                                                    console.error("Error saat memproses pengambilan gaji:", error);
+                                                    alert('Terjadi kesalahan saat memuat data kasbon');
+                                                }
+                                            }
+                                        });
+                                        
+                                        // Tombol Proses Ambil Gaji - UPDATED
+                                        document.getElementById('btnProsesAmbilGaji').addEventListener('click', async function() {
+                                            if (!selectedEmployeeData.id) return;
+                                            
+                                            try {
+                                                const totalGaji = selectedEmployeeData.totalGaji;
+                                                const totalKasbonText = document.getElementById('totalKasbonModal').textContent;
+                                                const totalKasbon = parseInt(totalKasbonText.replace(/[^\d]/g, '')) || 0;
+                                                const sisaGaji = Math.max(0, totalGaji - totalKasbon);
+                                                
+                                                console.log("Mengirim data penggajian:", { // Debug log
+                                                    id_karyawan: selectedEmployeeData.id,
+                                                    total_gaji: totalGaji,
+                                                    total_kasbon: totalKasbon,
+                                                    sisa_gaji: sisaGaji
+                                                });
+                                                
+                                                // Kirim data ke server
+                                                const response = await fetch('/admin/proses_ambil_gaji', {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                    },
+                                                    body: JSON.stringify({
+                                                        id_karyawan: selectedEmployeeData.id,
+                                                        total_gaji: totalGaji,
+                                                        total_kasbon: totalKasbon,
+                                                        sisa_gaji: sisaGaji
+                                                    })
+                                                });
+                                                
+                                                const data = await response.json();
+                                                
+                                                if (data.success) {
+                                                    alert('Pengambilan gaji berhasil diproses');
+                                                    location.reload();
+                                                } else {
+                                                    throw new Error(data.message || 'Gagal memproses pengambilan gaji');
+                                                }
+                                            } catch (error) {
+                                                console.error('Error:', error);
+                                                alert('Error: ' + error.message);
+                                            }
+                                        });
+                                    }
+
+                                    // Jalankan saat DOM siap
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        // Pastikan Firebase sudah diinisialisasi
+                                        if (!firebase.apps.length) {
+                                            const firebaseConfig = {
+                                                apiKey: "YOUR_API_KEY",
+                                                authDomain: "YOUR_AUTH_DOMAIN",
+                                                databaseURL: "YOUR_DATABASE_URL",
+                                                projectId: "YOUR_PROJECT_ID",
+                                                storageBucket: "YOUR_STORAGE_BUCKET",
+                                                messagingSenderId: "YOUR_SENDER_ID",
+                                                appId: "YOUR_APP_ID"
+                                            };
+                                            firebase.initializeApp(firebaseConfig);
+                                        }
+                                        
+                                        initEventListeners();
                                         updateAksiTerpilih();
                                     });
                                 </script>                                                                                                 
@@ -312,88 +555,89 @@
             </div>
         </div>
         <!-- Modal Ambil Gaji -->
-<div class="modal fade" id="modalAmbilGaji" tabindex="-1" aria-labelledby="modalAmbilGajiLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="modalAmbilGajiLabel">Ambil Gaji Karyawan</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <h6>ID Karyawan: <span id="modalIdKaryawan" class="fw-bold"></span></h6>
-                        <h6>Nama: <span id="modalNamaKaryawan" class="fw-bold"></span></h6>
+        <div class="modal fade" id="modalAmbilGaji" tabindex="-1" aria-labelledby="modalAmbilGajiLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="modalAmbilGajiLabel">Ambil Gaji Karyawan</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
                     </div>
-                    <div class="col-md-6 text-end">
-                        <h6>Periode: <span id="modalPeriode" class="fw-bold"></span></h6>
-                    </div>
-                </div>
-                
-                <div class="card mb-3">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0">Rincian Gaji</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Tanggal</th>
-                                        <th>Status</th>
-                                        <th>Gaji</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="detailGaji">
-                                    <!-- Data akan diisi oleh JavaScript -->
-                                </tbody>
-                                <tfoot class="table-primary">
-                                    <tr>
-                                        <th colspan="2">Total Gaji</th>
-                                        <th id="totalGajiModal">Rp 0</th>
-                                    </tr>
-                                </tfoot>
-                            </table>
+                    <div class="modal-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>ID Karyawan: <span id="modalIdKaryawan" class="fw-bold"></span></h6>
+                                <h6>Nama: <span id="modalNamaKaryawan" class="fw-bold"></span></h6>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <h6>Periode: <span id="modalPeriode" class="fw-bold"></span></h6>
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Rincian Gaji</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Tanggal</th>
+                                                <th>Status</th>
+                                                <th>Gaji</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="detailGaji">
+                                            <!-- Data akan diisi oleh JavaScript -->
+                                        </tbody>
+                                        <tfoot class="table-primary">
+                                            <tr>
+                                                <th colspan="2">Total Gaji</th>
+                                                <th id="totalGajiModal">Rp 0</th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Rincian Kasbon</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Tanggal</th>
+                                                <th>Jumlah</th>
+                                                <th>Keterangan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="detailKasbon">
+                                            <!-- Data akan diisi oleh JavaScript -->
+                                        </tbody>
+                                        <tfoot class="table-primary">
+                                            <tr>
+                                                <th colspan="1">Total Kasbon</th>
+                                                <th id="totalKasbonModal">Rp 0</th>
+                                                <th id="sisaGajiModal">Sisa Gaji: Rp 0</th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0">Rincian Kasbon</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Tanggal</th>
-                                        <th>Jumlah</th>
-                                        <th>Keterangan</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="detailKasbon">
-                                    <!-- Data akan diisi oleh JavaScript -->
-                                </tbody>
-                                <tfoot class="table-primary">
-                                    <tr>
-                                        <th colspan="1">Total Kasbon</th>
-                                        <th id="totalKasbonModal">Rp 0</th>
-                                        <th id="sisaGajiModal">Sisa Gaji: Rp 0</th>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                        <button type="button" id="btnProsesAmbilGaji" class="btn btn-primary">Proses Ambil Gaji</button>
                     </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                <button type="button" id="btnProsesAmbilGaji" class="btn btn-primary">Proses Ambil Gaji</button>
             </div>
         </div>
-    </div>
-</div>              
+    </div>              
     <script src="/static/vendor/jquery/jquery.min.js"></script>
     <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

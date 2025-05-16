@@ -1000,19 +1000,18 @@ def admin_penggajian():
 
                 timestamp_str = detail.get("timestamp", "-")
                 timestamp = None
-                if timestamp_str != "-":
+                if isinstance(timestamp_str, (int, float)):
+                    timestamp = datetime.fromtimestamp(timestamp_str)
+                else:
                     try:
-                        # Coba berbagai format timestamp
+                        # Format asli yang diharapkan
+                        timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S")
+                    except ValueError:
                         try:
-                            timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S")
+                            # Format dengan tanda hubung di jam: "%Y-%m-%dT%H-%M-%S"
+                            timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H-%M-%S")
                         except ValueError:
-                            try:
-                                timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                            except ValueError:
-                                # Jika format tidak sesuai, gunakan waktu sekarang
-                                timestamp = datetime.now()
-                    except:
-                        timestamp = None
+                            timestamp = datetime.now()  # fallback
 
                 # Filter berdasarkan nama karyawan
                 if nama_karyawan and nama != nama_karyawan:
