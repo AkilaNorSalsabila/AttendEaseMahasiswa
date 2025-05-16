@@ -216,26 +216,30 @@ def register():
         username = request.form['username']
         password = request.form['password']
 
-        # Validasi input
         if not username or not password:
             return render_template('register.html', message="Username dan Password harus diisi!")
 
-        # Hash password sebelum menyimpannya
+        ref = db.reference('akun')
+        akun_data = ref.get()
+
+        if akun_data:
+            for user in akun_data.values():
+                if user.get('username') == username:
+                    return render_template('register.html', message="Username sudah digunakan, silakan pilih username lain!")
+
         hashed_password = generate_password_hash(password)
 
         try:
-            # Simpan ke Firebase
-            ref = db.reference('akun')
             ref.push({
                 'username': username,
                 'password': hashed_password
             })
+            flash('Registrasi berhasil! Silakan login.', 'success')  # Tambahkan flash message
             return redirect('/login_admin')
         except Exception as e:
             return render_template('register.html', message=f"Terjadi kesalahan: {str(e)}")
 
     return render_template('register.html')
-
 
 # Halaman Dashboard Admin
 @app.route('/dashboard')
@@ -919,11 +923,8 @@ def attendance():
             attendance_list = [a for a in attendance_list if nama_filter.lower() in a['nama_karyawan'].lower()]
 
     return render_template("attendance.html", attendance_list=attendance_list)
-<<<<<<< HEAD
 
 
-=======
->>>>>>> 2465837cb013828cbc9eda8f2d33a719c56cd3cd
 @app.route('/admin/penggajian', methods=['GET', 'POST'])
 def admin_penggajian():
     if 'user' not in session:
@@ -1908,9 +1909,5 @@ def logout():
 
 # Jalankan aplikasi Flask
 if __name__ == "__main__":
-<<<<<<< HEAD
     app.run(debug=True, port=5050)
 
-=======
-    app.run(debug=True, port=5050)
->>>>>>> 2465837cb013828cbc9eda8f2d33a719c56cd3cd

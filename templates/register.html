@@ -33,6 +33,14 @@
                                     <div class="text-center">
                                         <h1 class="h4 text-gray-900 mb-4">Admin Register</h1>
                                     </div>
+
+                                    <!-- Notifikasi pesan jika ada -->
+                                    {% if message %}
+                                    <div class="alert alert-danger text-center" role="alert">
+                                        {{ message }}
+                                    </div>
+                                    {% endif %}
+
                                     <form action="/register" method="POST" class="user">
                                         <div class="form-group">
                                             <label for="username" class="text-gray-800">Username:</label>
