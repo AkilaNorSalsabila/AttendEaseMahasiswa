@@ -15,6 +15,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import re  # Tambahkan baris ini
 from flask import Flask, render_template, request, redirect, session, jsonify
+# ... import lainnya yang sudah ada
 from tensorflow.keras.models import load_model
 
 
@@ -30,6 +31,13 @@ dataset_path = 'DataSet'
 
 # Inisialisasi Firebase
 # Inisialisasi Firebase
+# Inisialisasi Firebase
+# Inisialisasi Firebase
+cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+initialize_app(cred, {
+    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+})
+bucket = storage.bucket('facerecognition-c8264.appspot.com')
 
 # Load model hasil fine-tuning
 model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
@@ -508,7 +516,42 @@ def get_last_id():
 
 
 # Memanmbahkan Dataset
+# Path folder dataset Akila
+# folder_path = r"D:\cobaf\AttendEaseMahasiswa\DataSet\KRY-01-Akila"
+# folder_name = os.path.basename(folder_path)
+
+# # Ekstrak ID dan Nama
+# parts = folder_name.split('-')
+# id_karyawan = parts[1]  # "01"
+# employee_id = f"KRY-{id_karyawan}"  # "KRY-01"
+# name = parts[2]  # "Akila"
+# jabatan = "Staff"  # <-- Ubah jika perlu
+
+# # Hitung jumlah gambar
+# image_extensions = ['.jpg', '.jpeg', '.png']
+# image_files = [f for f in os.listdir(folder_path) if os.path.splitext(f)[1].lower() in image_extensions]
+# jumlah_gambar = len(image_files)
+
+# # Waktu saat ini
+# timestamp = datetime.now().isoformat()
+
+# # Data yang akan dikirim
+# data = {
+#     "id": employee_id,
+#     "id_karyawan": id_karyawan,
+#     "name": name,
+#     "jabatan": jabatan,
+#     "images_count": jumlah_gambar,
+#     "timestamp": timestamp
+# }
+
+# # Simpan ke Firebase di path: /employees/KRY-01
+# ref = db.reference(f'employees/{employee_id}')
+# ref.set(data)
+
+# print(f"Data karyawan {employee_id} berhasil ditambahkan ke Firebase.")
 # Memanmbahkan Dataset 
+# Tambah route dataset
 # Tambah route dataset
 @app.route('/dataset', methods=['GET', 'POST'])
 def dataset():
@@ -520,14 +563,20 @@ def dataset():
             # Ambil data dari form
             name = request.form.get('name')
             jabatan = request.form.get('jabatan')
+            employee_id = request.form.get('employee_id')
 
-            if not all([name, jabatan]):
-                return jsonify({'status': 'error', 'message': 'Nama dan Jabatan harus diisi!'}), 400
+            if not all([name, jabatan, employee_id]):
+                return jsonify({'status': 'error', 'message': 'Nama, Jabatan, dan ID Karyawan harus diisi!'}), 400
 
-            # Generate ID baru
-            employee_id = generate_new_employee_id()
+            # Cek apakah employee_id sudah ada
+            employee_ref = db.reference(f'employees/{employee_id}')
+            if employee_ref.get() is not None:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'ID {employee_id} sudah terdaftar. Gunakan ID lain!'
+                }), 400
 
-            # Siapkan folder lokal untuk menyimpan dataset
+            # Siapkan folder lokal
             folder_name = f"{employee_id}-{name.replace(' ', '_')}"
             folder_path = os.path.join(dataset_path, folder_name)
             os.makedirs(folder_path, exist_ok=True)
@@ -536,10 +585,8 @@ def dataset():
             images = [request.form.get(key) for key in request.form if key.startswith('image_')]
             if not images:
                 return jsonify({'status': 'error', 'message': 'Tidak ada gambar yang diterima!'}), 400
+
             def process_and_crop_faces(image, file_name_prefix, save_folder, user_id, user_name, start_count=0, padding=0.2):
-                """
-                Proses wajah: crop, resize, dan simpan lokal + Firebase Storage.
-                """
                 img_yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
                 img_yuv[:, :, 0] = cv2.equalizeHist(img_yuv[:, :, 0])
                 image = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2BGR)
@@ -593,11 +640,10 @@ def dataset():
 
             # Simpan metadata ke Firebase
             images_count = len([f for f in os.listdir(folder_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
-            employee_ref = db.reference(f'employees/{employee_id}')
             employee_ref.set({
                 'id': employee_id,
                 'name': name,
-                'id_karyawan': employee_id.split('-')[-1],  # hanya nomor belakang
+                'id_karyawan': employee_id.split('-')[-1],
                 'jabatan': jabatan,
                 'images_count': images_count,
                 'timestamp': datetime.now().isoformat()
@@ -611,7 +657,6 @@ def dataset():
 
         except Exception as e:
             return jsonify({'status': 'error', 'message': f'Terjadi kesalahan: {str(e)}'}), 500
-
 
 # Fungsi untuk mengunggah file dan mencatat metadata
 def upload_dataset_to_firebase():
@@ -673,64 +718,175 @@ def upload_dataset_to_firebase():
 upload_dataset_to_firebase()
 
 
-# @app.route('/attendance', methods=['GET'])
-# def attendance_report():
-#     try:
-#         employees_ref = db.collection('employees')
-#         employees_docs = employees_ref.stream()
 
-#         jadwal_ref = db.collection('jadwal_kerja')
-#         jadwal_docs = jadwal_ref.stream()
+# @app.route('/attendance', methods=['GET', 'POST'])
+# def admin_attendance():
+#     """
+#     Admin melihat laporan absensi berdasarkan golongan dan mata kuliah.
+#     """
+#     if 'user' not in session:
+#         return redirect('/login_admin')
 
-#         attendance_ref = db.collection('attendance_karyawan')
-#         attendance_docs = attendance_ref.stream()
+#     golongan = None
+#     mata_kuliah = None
+#     attendance_list = []
 
-#         # Ambil data ke dalam dictionary
-#         employees = {doc.id: doc.to_dict() for doc in employees_docs}
-#         jadwal_list = [doc.to_dict() for doc in jadwal_docs]
-#         attendance_list = [doc.to_dict() for doc in attendance_docs]
+#     # Ambil data jadwal terlebih dahulu
+#     jadwal_ref = db.reference('jadwal_mata_kuliah')
+#     jadwal_data = jadwal_ref.get() or {}
 
-#         # Buat laporan
-#         report = []
-#         for schedule in jadwal_list:
-#             tanggal = schedule.get('tanggal')
-#             for emp_id, emp_data in employees.items():
-#                 attendance_record = next(
-#                     (att for att in attendance_list if att.get('employee_id') == emp_id and att.get('tanggal') == tanggal),
-#                     None
-#                 )
+#     # Pastikan jadwal_data terisi, jika kosong atau None, tangani dengan cara yang sesuai
+#     if not jadwal_data:
+#         jadwal_data = {}
 
-#                 if attendance_record and attendance_record.get('jam_masuk') and attendance_record.get('jam_pulang'):
-#                     status = 'Hadir'
-#                     jam_masuk = attendance_record.get('jam_masuk')
-#                     jam_pulang = attendance_record.get('jam_pulang')
-#                     bukti = attendance_record.get('bukti')
-#                 else:
-#                     status = 'Tidak Hadir'
-#                     jam_masuk = None
-#                     jam_pulang = None
-#                     bukti = None
+#     # Jika form disubmit, ambil golongan dan mata kuliah dari form
+#     if request.method == 'POST':
+#         golongan = request.form.get('golongan')
+#         mata_kuliah = request.form.get('mata_kuliah')
 
-#                 report.append({
-#                     'id_karyawan': emp_id,
-#                     'nama': emp_data.get('nama'),
-#                     'tanggal': tanggal,
-#                     'jam_masuk': jam_masuk,
-#                     'jam_pulang': jam_pulang,
-#                     'status': status,
-#                     'bukti': bukti
-#                 })
+#         print(f"Golongan yang dipilih: {golongan}")  # Debugging output golongan
+#         print(f"Mata Kuliah yang dipilih: {mata_kuliah}")  # Debugging output mata kuliah
 
-#         return jsonify(report), 200
+#         # Ambil data dari Firebase berdasarkan golongan dan mata kuliah
+#         attendance_ref = db.reference('attendance')
+#         attendance_data = attendance_ref.get() or {}
 
-#     except Exception as e:
-#         return jsonify({'error': str(e)}), 500
+#         # Ambil data jadwal untuk golongan dan mata kuliah yang dipilih
+#         golongan_mahasiswa = jadwal_data.get(golongan, {}).get(mata_kuliah, [])
+
+#         # Ambil data mahasiswa dari koleksi students
+#         students_ref = db.reference('students')
+#         students_data = students_ref.get() or {}
+
+#         # Pastikan students_data adalah dictionary, bukan string
+#         if isinstance(students_data, str):
+#             students_data = {}
+
+#         # Ambil daftar mahasiswa berdasarkan golongan yang dipilih
+#         golongan_students = [student for student in students_data.values() if student['golongan'] == golongan]
+
+#         # Proses data absensi sesuai golongan dan mata kuliah yang dipilih
+#         for mata_kuliah_db, minggu_data in attendance_data.items():
+#             if mata_kuliah_db != mata_kuliah:
+#                 continue
+#             for minggu_ke, student_data in minggu_data.items():
+#                 for student_id, records in student_data.items():
+#                     for record_id, detail in records.items():
+#                         if isinstance(detail, dict) and detail.get("golongan") == golongan:
+#                             full_name = detail.get("name", "Tidak Ada")
+#                             name_only = full_name.split('-')[-1].strip() if full_name else "Tidak Ada"
+                            
+#                             # Gunakan regex untuk memastikan minggu_ke hanya berisi angka
+#                             minggu_number = re.sub(r'\D', '', minggu_ke)  # Hapus semua karakter non-digit
+
+#                             # Tambahkan data absensi mahasiswa yang hadir
+#                             attendance_list.append({
+#                                 "kode_mata_kuliah": detail.get("kode_mata_kuliah", "Tidak Ada"),
+#                                 "nama_mata_kuliah": detail.get("nama_mata_kuliah", "Tidak Ada"),
+#                                 "minggu_ke": int(minggu_number),  # Menggunakan minggu_ke sebagai integer
+#                                 "nim": detail.get("nim", "Tidak Ada"),
+#                                 "nama": name_only,
+#                                 "status": detail.get("status", "Hadir"),
+#                                 "timestamp": detail.get("timestamp", "Tidak Ada"),
+#                                 "image_url": detail.get("image_url", None)
+#                             })
+
+#         # Menambahkan mahasiswa yang tidak hadir berdasarkan golongan
+#         for mahasiswa in golongan_students:
+#             found = False
+#             for attendance in attendance_list:
+#                 if attendance['nim'] == mahasiswa['nim']:  # Cek berdasarkan NIM
+#                     found = True
+#                     break
+
+#             # Jika mahasiswa tidak ada dalam data absensi, tambahkan sebagai tidak hadir
+#             if not found:
+#                 # Tentukan minggu yang sesuai, gunakan minggu yang ada di data absensi
+#                 for mata_kuliah_db, minggu_data in attendance_data.items():
+#                     if mata_kuliah_db == mata_kuliah:
+#                         for minggu_ke, student_data in minggu_data.items():
+#                             # Gunakan minggu_ke dari data yang ada
+#                             minggu_number = re.sub(r'\D', '', minggu_ke)  # Hapus semua karakter non-digit
+
+#                             attendance_list.append({
+#                                 "kode_mata_kuliah": mata_kuliah,
+#                                 "nama_mata_kuliah": mata_kuliah,
+#                                 "minggu_ke": int(minggu_number),  # Gunakan minggu_ke sebagai integer
+#                                 "nim": mahasiswa['nim'],
+#                                 "nama": mahasiswa['name'],
+#                                 "status": "Tidak Hadir",
+#                                 "timestamp": "Tidak Ada",
+#                                 "image_url": None
+#                             })
+
+#         # Urutkan data berdasarkan minggu_ke dan nama mahasiswa
+#         attendance_list = sorted(attendance_list, key=lambda x: (x['minggu_ke'], x['nama']))
+
+#     # Ambil daftar golongan dari jadwal_data setelah memastikan data ada
+#     golongan_list = list(jadwal_data.keys())  # Ambil daftar golongan (A, B, C)
+
+#     # Ambil mata kuliah berdasarkan golongan yang dipilih
+#     mata_kuliah_list = []
+#     if golongan:
+#         mata_kuliah_list = list(jadwal_data.get(golongan, {}).keys())
+
+#     return render_template('attendance.html', 
+#                            attendance_list=attendance_list,
+#                            golongan_list=golongan_list,
+#                            mata_kuliah_list=mata_kuliah_list,
+#                            golongan=golongan, mata_kuliah=mata_kuliah)
 
 
+# @app.route('/update_attendance', methods=['POST'])
+# def update_attendance():
+#     """
+#     Admin memperbarui status absensi mahasiswa.
+#     """
+#     if 'user' not in session:
+#         return redirect('/login_admin')
+
+#     # Pastikan data yang diterima adalah JSON
+#     data = request.get_json()
+#     if not data:
+#         return jsonify({'status': 'error', 'message': 'Invalid JSON data'}), 400
+    
+#     # Debugging data yang diterima
+#     print(f"Data yang diterima: {data}")
+
+#     nim = data.get('nim')
+#     minggu_ke = data.get('minggu_ke')
+#     status = data.get('status')
+
+#     # Pastikan semua data yang diperlukan ada
+#     if not nim or not minggu_ke or not status:
+#         return jsonify({'status': 'error', 'message': 'NIM, Minggu Ke, dan Status harus ada.'}), 400
+
+#     # Update status absensi di Firebase
+#     attendance_ref = db.reference('attendance')
+#     attendance_data = attendance_ref.get()
+
+#     # Pastikan data absensi ada
+#     if not attendance_data:
+#         return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan.'}), 404
+
+#     # Cari entri yang sesuai dan update status
+#     for mata_kuliah, minggu_data in attendance_data.items():
+#         for minggu, student_data in minggu_data.items():
+#             for student_id, records in student_data.items():
+#                 if student_id == nim:  # Cari berdasarkan NIM
+#                     for record_id, record_detail in records.items():
+#                         if minggu == minggu_ke:  # Cari berdasarkan minggu
+#                             record_detail['status'] = status  # Update status
+#                             # Simpan perubahan ke Firebase
+#                             attendance_ref.child(mata_kuliah).child(minggu).child(student_id).child(record_id).update(record_detail)
+#                             return jsonify({'status': 'success', 'message': 'Absensi berhasil diperbarui.'})
+
+#     return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan untuk NIM dan minggu yang diberikan.'}), 404
+#KARYAWAN ATTENDANCE
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
-    ref = db.reference("attendance_karyawan")
-    snapshot = ref.get()
+    data = db.get_all_attendance()  # ambil dari database
+    return render_template("attendance.html", data=data)
 
     attendance_list = []
 
@@ -771,8 +927,7 @@ def attendance():
 
     return render_template("attendance.html", attendance_list=attendance_list)
 
-if __name__ == "__main__":
-    app.run(debug=True)
+
 @app.route('/admin/penggajian', methods=['GET', 'POST'])
 def admin_penggajian():
     if 'user' not in session:
@@ -1264,34 +1419,80 @@ def set_absensi():
 #     cv2.destroyAllWindows()
 #     if not attendance_logged:
 #         print("[ERROR] Presensi tidak tercatat. Pastikan wajah terlihat jelas.")
-
-@app.route('/rekap_absensi', methods=['GET'])
+@app.route('/rekap_absensi', methods=['GET', 'POST'])
 def rekap_absensi():
-    if 'mahasiswa' not in session:
-        return redirect('/login_mahasiswa')
+    if 'karyawan' not in session:
+        return redirect('/login_karyawan')
 
-    mahasiswa = session['mahasiswa']
-    attendance_ref = db.reference("attendance")
-    attendance_data = attendance_ref.get() or {}
+    karyawan = session['karyawan']
+    id_karyawan = karyawan['id']
+    jabatan = karyawan['jabatan']
 
-    mahasiswa_attendance = []
+    jadwal_ref = db.reference(f"jadwal_kerja/{jabatan}")
+    semua_jadwal = jadwal_ref.get() or {}
 
+    attendance_ref = db.reference("attendance_karyawan")
+    semua_absensi = attendance_ref.get() or {}
+
+    karyawan_attendance = []
+
+    for id_jadwal, jadwal_info in semua_jadwal.items():
+        jadwal_masuk = jadwal_info.get('jam_masuk', '')
+        jadwal_pulang = jadwal_info.get('jam_pulang', '')
+
+        absensi_jadwal = semua_absensi.get(id_jadwal, {}).get(id_karyawan, {})
+
+        timestamps = []
+
+        for record in absensi_jadwal.values():
+            raw_timestamp = record.get('timestamp', '')
+            try:
+                dt_object = datetime.strptime(raw_timestamp, "%Y-%m-%dT%H-%M-%S")
+                timestamps.append((dt_object, record))
+            except ValueError:
+                continue  # lewati jika timestamp tidak valid
+
+        timestamps.sort()  # urutkan berdasarkan waktu
+
+        if len(timestamps) >= 2:
+            masuk_record = timestamps[0][1]
+            pulang_record = timestamps[-1][1]
+            status = 'Hadir'
+            timestamp_info = f"{timestamps[0][0].strftime('%d %B %Y %H:%M:%S')} - {timestamps[-1][0].strftime('%d %B %Y %H:%M:%S')}"
+            image_url = masuk_record.get('image_url', '') or pulang_record.get('image_url', '')
+        else:
+            status = 'Tidak Hadir'
+            timestamp_info = ''
+            image_url = ''
+
+        karyawan_attendance.append({
+            'id_jadwal': id_jadwal,
+            'jam_masuk': jadwal_masuk,
+            'jam_pulang': jadwal_pulang,
+            'status': status,
+            'timestamp': timestamp_info,
+            'image_url': image_url
+        })
+
+    karyawan_attendance.sort(key=lambda x: x['id_jadwal'])
+
+    return render_template("rekap_absensi.html", attendance_list=karyawan_attendance, karyawan=karyawan)
     # Iterasi data absensi
     for kode_mata_kuliah, minggu_data in attendance_data.items():
         # Pastikan minggu_data adalah dictionary atau list
         if isinstance(minggu_data, dict):
             for minggu, student_data in minggu_data.items():
                 # Cek apakah student_data bukan None
-                if student_data and mahasiswa['id'] in student_data:
+                if student_data and karyawan['id'] in student_data:
                     # Masuk ke key acak
-                    for random_key, detail in student_data[mahasiswa['id']].items():
+                    for random_key, detail in student_data[karyawan['id']].items():
                         # Cek apakah detail adalah dictionary sebelum memanggil .get()
                         if isinstance(detail, dict):
-                            mahasiswa_attendance.append({
-                                "kode_mata_kuliah": detail.get("kode_mata_kuliah", "Unknown"),
-                                "nama_mata_kuliah": detail.get("nama_mata_kuliah", "Unknown"),
-                                "minggu": minggu,
-                                "timestamp": detail.get("timestamp", "Tidak Ada Data"),
+                            karyawan_attendance.append({
+                                "id_jadwal": detail.get("id_jadwal", "Unknown"),
+                                "jam_masuk": detail.get("jam_masuk", "Tidak ada"),
+                                "jam_pulang": detail.get("jam_pulang", "Tidak ada"),
+                                "timestamp": detail.get("timestamp", "Tidak ada"),
                                 "status": detail.get("status", "Tidak Hadir"),
                                 "image_url": detail.get("image_url", None)
                             })
@@ -1301,14 +1502,15 @@ def rekap_absensi():
 
         elif isinstance(minggu_data, list):
             # Handle jika minggu_data adalah list
-            for index, student_data in enumerate(minggu_data):
-                # Cek apakah student_data bukan None
-                if student_data and mahasiswa['id'] in student_data:
-                    for random_key, detail in student_data[mahasiswa['id']].items():
+            for index, karyawan_data in enumerate(minggu_data):
+                # Cek apakah karyawan_data bukan None
+                if karyawan_data and karyawan['id'] in karyawan_data:
+                    for random_key, detail in karyawan_data[karyawan['id']].items():
                         if isinstance(detail, dict):
-                            mahasiswa_attendance.append({
-                                "kode_mata_kuliah": detail.get("kode_mata_kuliah", "Unknown"),
-                                "nama_mata_kuliah": detail.get("nama_mata_kuliah", "Unknown"),
+                            karyawan_attendance.append({
+                                "id_jadwal": detail.get("id_jadwal", "Unknown"),
+                                "jam_masuk": detail.get("jam_masuk", "Tidak ada"),
+                                "jam_pulang": detail.get("jam_pulang", "Tidak ada"),
                                 "minggu": index,  # Menggunakan index minggu dari list
                                 "timestamp": detail.get("timestamp", "Tidak Ada Data"),
                                 "status": detail.get("status", "Tidak Hadir"),
@@ -1318,13 +1520,13 @@ def rekap_absensi():
                             # Jika detail bukan dictionary, tampilkan pesan debug
                             print(f"[DEBUG] Detail for {random_key} is not a dictionary: {detail}")
 
-    # Debug data absensi mahasiswa
-    print(f"[DEBUG] Mahasiswa Attendance: {mahasiswa_attendance}")
+    # Debug data absensi karyawan
+    print(f"[DEBUG] Karyawan Attendance: {karyawan_attendance}")
 
     return render_template(
         'rekap_absensi.html',
-        mahasiswa=mahasiswa,
-        attendance_list=mahasiswa_attendance
+        karyawan=karyawan,
+        attendance_list=karyawan_attendance
     )
 
 
@@ -1634,3 +1836,4 @@ def logout():
 # Jalankan aplikasi Flask
 if __name__ == "__main__":
     app.run(debug=True, port=5050)
+
