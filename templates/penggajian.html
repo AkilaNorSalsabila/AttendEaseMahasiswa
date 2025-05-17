@@ -17,6 +17,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+
     <style>
         .modal-header, .modal-body, .modal-footer {
             padding: 15px;
@@ -70,13 +72,14 @@
         <!-- Firebase JS -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <script>
         // Konfigurasi Firebase
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
             authDomain: "YOUR_AUTH_DOMAIN",
-            databaseURL: "YOUR_DATABASE_URL",
+            databaseURL: "https://facerecognition-c8264-default-rtdb.firebaseio.com/",
             projectId: "YOUR_PROJECT_ID",
             storageBucket: "YOUR_STORAGE_BUCKET",
             messagingSenderId: "YOUR_SENDER_ID",
@@ -200,7 +203,7 @@
                                     <th style="width: 50px;"><input type="checkbox" id="checkAll"></th>
                                     <th style="min-width: 100px;">ID Karyawan</th>
                                     <th style="min-width: 150px;">Nama</th>
-                                    <th style="min-width: 160px;">Waktu</th>
+                                    <th style="min-width: 160px;">Tanggal</th>
                                     <th style="min-width: 120px;">Gaji</th>
                                     <th style="min-width: 130px;">Status</th>
                                 </tr>
@@ -210,23 +213,19 @@
                                 <tr>
                                     <td>
                                         <input type="checkbox" class="check-item" name="selected[]" 
-                                               value="{{ a.id_karyawan }}" 
-                                               data-gaji="{{ a.gaji }}">
+                                            value="{{ a.id_karyawan }}" 
+                                            data-gaji="{{ a.gaji }}"
+                                            data-status="{{ a.status_gaji|default('belum diambil') }}">
                                     </td>
                                     <td>{{ a.id_karyawan }}</td>
                                     <td>{{ a.nama }}</td>
                                     <td>
-                                        {% if a.timestamp and a.timestamp != '-' %}
-                                            {{ a.timestamp.strftime('%Y-%m-%d') }}<br>
-                                            <span class="text-muted">{{ a.timestamp.strftime('%H:%M:%S') }}</span>
-                                        {% else %}
-                                            -
-                                        {% endif %}
+                                        {{a.tanggal}}
                                     </td>                                                                        
                                     <td class="gaji-value" data-status="{{ a.status }}">
                                         Rp {{ '{:,.0f}'.format(a.gaji).replace(',', '.') }}
                                     </td>
-                                    <td>Belum di ambil</td>
+                                    <td class="status-gaji">{{ a.status_gaji|default('belum diambil') }}</td>
                                 </tr>
                                 {% endfor %}
                                 <script>
@@ -235,7 +234,7 @@
                                         return 'Rp ' + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
                                     }
 
-                                    // Variabel global untuk menyimpan data yang dipilih
+                                    // Variabel global
                                     let selectedEmployeeData = {
                                         id: null,
                                         nama: null,
@@ -243,69 +242,55 @@
                                         totalGaji: 0
                                     };
 
-                                    // Fungsi untuk memuat data kasbon dari Firebase - UPDATED
+                                    // Fungsi memuat kasbon dari backend
                                     async function loadKasbonData(employeeId) {
                                         try {
-                                            console.log("Mencoba memuat kasbon untuk ID:", employeeId); // Debug log
-                                            
-                                            const kasbonRef = firebase.database().ref('kasbon/' + employeeId);
-                                            const snapshot = await kasbonRef.once('value');
-                                            const kasbonData = snapshot.val();
-                                            
-                                            console.log("Data kasbon dari Firebase:", kasbonData); // Debug log
+                                            const response = await fetch('/admin/ambil_kasbon', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ id_karyawan: employeeId })
+                                            });
 
-                                            // Jika data kasbon ditemukan
-                                            if (kasbonData && kasbonData.kasbon !== undefined) {
+                                            const data = await response.json();
+                                            if (data.success) {
                                                 return {
-                                                    total: parseInt(kasbonData.kasbon) || 0,
+                                                    total: data.kasbon || 0,
                                                     items: [{
-                                                        tanggal: kasbonData.tanggal || '-',
-                                                        jumlah: parseInt(kasbonData.kasbon) || 0,
-                                                        keterangan: 'Kasbon ' + (kasbonData.name || employeeId)
+                                                        tanggal: '-',
+                                                        jumlah: data.kasbon || 0,
+                                                        keterangan: 'Kasbon ' + (data.name || '')
                                                     }]
                                                 };
+                                            } else {
+                                                console.error("Gagal memuat kasbon:", data.message);
+                                                return { total: 0, items: [] };
                                             }
-                                            
-                                            return { total: 0, items: [] };
                                         } catch (error) {
                                             console.error("Error loading kasbon data:", error);
                                             return { total: 0, items: [] };
                                         }
                                     }
 
-                                    // Fungsi utama untuk update bottom bar
+                                    // Fungsi utama untuk memperbarui tampilan
                                     function updateAksiTerpilih() {
                                         try {
                                             const checkboxes = document.querySelectorAll('.check-item:checked');
                                             const bottomBar = document.getElementById('bottomBar');
-                                            
-                                            if (!bottomBar) {
-                                                console.error("Bottom bar element not found!");
-                                                return;
-                                            }
+                                            if (!bottomBar) return;
 
                                             let total = 0;
                                             let count = checkboxes.length;
                                             let currentId = null;
                                             let invalidSelection = false;
-                                            
-                                            // Reset selected data
-                                            selectedEmployeeData = {
-                                                id: null,
-                                                nama: null,
-                                                items: [],
-                                                totalGaji: 0
-                                            };
-                                            
+
+                                            selectedEmployeeData = { id: null, nama: null, items: [], totalGaji: 0 };
+
                                             checkboxes.forEach(cb => {
                                                 const row = cb.closest('tr');
-                                                if (!row) return;
-                                                
                                                 const id_karyawan = row.cells[1].textContent;
                                                 const nama = row.cells[2].textContent;
                                                 const gaji = parseInt(cb.dataset.gaji) || 0;
-                                                
-                                                // Validasi ID karyawan
+
                                                 if (currentId === null) {
                                                     currentId = id_karyawan;
                                                     selectedEmployeeData.id = id_karyawan;
@@ -313,44 +298,39 @@
                                                 } else if (currentId !== id_karyawan) {
                                                     invalidSelection = true;
                                                 }
-                                                
-                                                // Simpan data
+
                                                 selectedEmployeeData.items.push({
                                                     tanggal: row.cells[3].textContent.trim(),
                                                     status: row.cells[5].textContent.trim(),
                                                     gaji: gaji
                                                 });
-                                                
+
                                                 total += gaji;
                                             });
-                                            
+
                                             selectedEmployeeData.totalGaji = total;
-                                            
+
                                             const totalGajiText = document.getElementById('totalGajiBottom');
                                             const jumlahText = document.getElementById('jumlahTerpilih');
                                             const ambilGajiBtn = bottomBar.querySelector('button');
-                                            
+
                                             if (count > 0) {
                                                 bottomBar.style.display = 'flex';
-                                                
+
                                                 if (invalidSelection) {
-                                                    bottomBar.querySelector('.bg-success').classList.remove('bg-success');
+                                                    bottomBar.querySelector('.rounded-pill').classList.remove('bg-success');
                                                     bottomBar.querySelector('.rounded-pill').classList.add('bg-danger');
                                                     jumlahText.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Pilih ID karyawan sama';
                                                     totalGajiText.textContent = '';
-                                                    if (ambilGajiBtn) {
-                                                        ambilGajiBtn.disabled = true;
-                                                        ambilGajiBtn.style.display = 'none';
-                                                    }
+                                                    ambilGajiBtn.disabled = true;
+                                                    ambilGajiBtn.style.display = 'none';
                                                 } else {
                                                     bottomBar.querySelector('.rounded-pill').classList.remove('bg-danger');
                                                     bottomBar.querySelector('.rounded-pill').classList.add('bg-success');
                                                     jumlahText.textContent = `${count} Item (${selectedEmployeeData.nama})`;
                                                     totalGajiText.textContent = formatRupiah(total);
-                                                    if (ambilGajiBtn) {
-                                                        ambilGajiBtn.disabled = false;
-                                                        ambilGajiBtn.style.display = 'block';
-                                                    }
+                                                    ambilGajiBtn.disabled = false;
+                                                    ambilGajiBtn.style.display = 'block';
                                                 }
                                             } else {
                                                 bottomBar.style.display = 'none';
@@ -360,69 +340,73 @@
                                         }
                                     }
 
-                                    // Inisialisasi event listeners - UPDATED
+                                    // Fungsi untuk real-time update status gaji
+                                    function setupRealtimeStatus() {
+                                        const employeeId = selectedEmployeeData?.id;
+                                        if (!employeeId) return;
+
+                                        const statusRef = firebase.database().ref(`penggajian/${employeeId}`);
+                                        statusRef.on('value', (snapshot) => {
+                                            const data = snapshot.val();
+                                            if (data) {
+                                                document.querySelectorAll(`tr[data-employee="${employeeId}"] .status-gaji`).forEach(el => {
+                                                    el.textContent = 'sudah diambil';
+                                                });
+
+                                                document.querySelectorAll(`.check-item[value="${employeeId}"]`).forEach(cb => {
+                                                    cb.dataset.status = 'sudah diambil';
+                                                });
+                                            }
+                                        });
+                                    }
+
+                                    // Inisialisasi event
                                     function initEventListeners() {
-                                        // Checkbox individual
                                         document.querySelectorAll('.check-item').forEach(cb => {
                                             cb.addEventListener('change', updateAksiTerpilih);
                                         });
-                                        
-                                        // Checkbox "Pilih Semua"
+
                                         const checkAll = document.getElementById('checkAll');
                                         if (checkAll) {
-                                            checkAll.addEventListener('change', function() {
+                                            checkAll.addEventListener('change', function () {
                                                 document.querySelectorAll('.check-item').forEach(cb => {
                                                     cb.checked = this.checked;
                                                 });
                                                 updateAksiTerpilih();
                                             });
                                         }
-                                        
-                                        // Tombol Ambil Gaji - UPDATED with better error handling
-                                        document.addEventListener('click', async function(e) {
+
+                                        // Tombol ambil gaji (tampilkan modal)
+                                        document.addEventListener('click', async function (e) {
                                             if (e.target.closest('#bottomBar button')) {
                                                 if (!selectedEmployeeData.id) {
                                                     alert('Pilih karyawan terlebih dahulu');
                                                     return;
                                                 }
-                                                
-                                                console.log("Tombol Ambil Gaji diklik untuk ID:", selectedEmployeeData.id); // Debug log
-                                                
+
                                                 try {
-                                                    // Isi data modal
                                                     document.getElementById('modalIdKaryawan').textContent = selectedEmployeeData.id;
                                                     document.getElementById('modalNamaKaryawan').textContent = selectedEmployeeData.nama;
-                                                    
-                                                    // Isi detail gaji
+
                                                     const detailGajiBody = document.getElementById('detailGaji');
-                                                    if (detailGajiBody) {
-                                                        detailGajiBody.innerHTML = '';
-                                                        selectedEmployeeData.items.forEach(item => {
-                                                            detailGajiBody.innerHTML += `
-                                                                <tr>
-                                                                    <td>${item.tanggal}</td>
-                                                                    <td>${item.status}</td>
-                                                                    <td>${formatRupiah(item.gaji)}</td>
-                                                                </tr>
-                                                            `;
-                                                        });
-                                                        document.getElementById('totalGajiModal').textContent = formatRupiah(selectedEmployeeData.totalGaji);
-                                                    }
-                                                    
-                                                    // Load dan tampilkan data kasbon - UPDATED
-                                                    const kasbonData = await loadKasbonData(selectedEmployeeData.id);
-                                                    console.log("Kasbon data yang akan ditampilkan:", kasbonData); // Debug log
-                                                    
-                                                    const detailKasbonBody = document.getElementById('detailKasbon');
-                                                    detailKasbonBody.innerHTML = '';
-                                                    
-                                                    if (kasbonData.items.length === 0) {
-                                                        detailKasbonBody.innerHTML = `
+                                                    detailGajiBody.innerHTML = '';
+                                                    selectedEmployeeData.items.forEach(item => {
+                                                        detailGajiBody.innerHTML += `
                                                             <tr>
-                                                                <td colspan="3" class="text-center">Tidak ada data kasbon</td>
+                                                                <td>${item.tanggal}</td>
+                                                                <td>${item.status}</td>
+                                                                <td>${formatRupiah(item.gaji)}</td>
                                                             </tr>
                                                         `;
-                                                    } else {
+                                                    });
+
+                                                    document.getElementById('totalGajiModal').textContent = formatRupiah(selectedEmployeeData.totalGaji);
+
+                                                    const kasbonData = await loadKasbonData(selectedEmployeeData.id);
+                                                    const detailKasbonBody = document.getElementById('detailKasbon');
+                                                    detailKasbonBody.innerHTML = '';
+
+                                                    if (kasbonData.items.length > 0) {
                                                         const item = kasbonData.items[0];
                                                         detailKasbonBody.innerHTML = `
                                                             <tr>
@@ -431,78 +415,135 @@
                                                                 <td>${item.keterangan}</td>
                                                             </tr>
                                                         `;
+                                                    } else {
+                                                        detailKasbonBody.innerHTML = `
+                                                            <tr>
+                                                                <td colspan="3" class="text-center">Tidak ada data kasbon</td>
+                                                            </tr>
+                                                        `;
                                                     }
-                                                    
-                                                    // Update total kasbon dan sisa gaji
+
                                                     document.getElementById('totalKasbonModal').textContent = formatRupiah(kasbonData.total);
-                                                    document.getElementById('sisaGajiModal').textContent = 
-                                                        `Sisa Gaji: ${formatRupiah(selectedEmployeeData.totalGaji - kasbonData.total)}`;
-                                                    
-                                                    // Tampilkan modal
-                                                    const modal = new bootstrap.Modal(document.getElementById('modalAmbilGaji'));
-                                                    modal.show();
-                                                    
+                                                    document.getElementById('sisaGajiModal').textContent = `Sisa Gaji: ${formatRupiah(selectedEmployeeData.totalGaji - kasbonData.total)}`;
+
+                                                    new bootstrap.Modal(document.getElementById('modalAmbilGaji')).show();
                                                 } catch (error) {
-                                                    console.error("Error saat memproses pengambilan gaji:", error);
-                                                    alert('Terjadi kesalahan saat memuat data kasbon');
+                                                    console.error("Error:", error);
+                                                    alert("Gagal memuat data kasbon");
                                                 }
                                             }
                                         });
-                                        
-                                        // Tombol Proses Ambil Gaji - UPDATED
+
                                         document.getElementById('btnProsesAmbilGaji').addEventListener('click', async function() {
-                                            if (!selectedEmployeeData.id) return;
-                                            
+                                            if (!selectedEmployeeData.id) {
+                                                alert('Pilih karyawan terlebih dahulu');
+                                                return;
+                                            }
+
+                                            // Tampilkan loading state
+                                            const btn = this;
+                                            btn.disabled = true;
+                                            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Memproses...';
+
                                             try {
+                                                // Hitung total dan sisa gaji
                                                 const totalGaji = selectedEmployeeData.totalGaji;
-                                                const totalKasbonText = document.getElementById('totalKasbonModal').textContent;
-                                                const totalKasbon = parseInt(totalKasbonText.replace(/[^\d]/g, '')) || 0;
+                                                const totalKasbon = parseInt(
+                                                    document.getElementById('totalKasbonModal').textContent.replace(/[^\d]/g, '')
+                                                ) || 0;
                                                 const sisaGaji = Math.max(0, totalGaji - totalKasbon);
                                                 
-                                                console.log("Mengirim data penggajian:", { // Debug log
-                                                    id_karyawan: selectedEmployeeData.id,
+                                                // Siapkan payload
+                                                const payload = {
+                                                    employeeId: selectedEmployeeData.id,
+                                                    nama: selectedEmployeeData.nama,
+                                                    detail: selectedEmployeeData.items.map(item => ({
+                                                        tanggal: item.tanggal,
+                                                        status: item.status,
+                                                        gaji: item.gaji,
+                                                        id_jadwal: item.id_jadwal || null
+                                                    })),
                                                     total_gaji: totalGaji,
                                                     total_kasbon: totalKasbon,
                                                     sisa_gaji: sisaGaji
-                                                });
-                                                
-                                                // Kirim data ke server
+                                                };
+
+                                                // Kirim ke server
                                                 const response = await fetch('/admin/proses_ambil_gaji', {
                                                     method: 'POST',
-                                                    headers: {
-                                                        'Content-Type': 'application/json',
-                                                    },
-                                                    body: JSON.stringify({
-                                                        id_karyawan: selectedEmployeeData.id,
-                                                        total_gaji: totalGaji,
-                                                        total_kasbon: totalKasbon,
-                                                        sisa_gaji: sisaGaji
-                                                    })
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify(payload)
                                                 });
-                                                
-                                                const data = await response.json();
-                                                
-                                                if (data.success) {
-                                                    alert('Pengambilan gaji berhasil diproses');
-                                                    location.reload();
-                                                } else {
-                                                    throw new Error(data.message || 'Gagal memproses pengambilan gaji');
+
+                                                // Tangani response
+                                                if (!response.ok) {
+                                                    const errorData = await response.json();
+                                                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
                                                 }
+
+                                                const result = await response.json();
+                                                
+                                                if (!result.success) {
+                                                    throw new Error(result.message || 'Gagal memproses penggajian');
+                                                }
+
+                                                // Tampilkan notifikasi sukses
+                                                const modal = bootstrap.Modal.getInstance(document.getElementById('modalAmbilGaji'));
+                                                modal.hide();
+                                                
+                                                Swal.fire({
+                                                    icon: 'success',
+                                                    title: 'Berhasil!',
+                                                    text: `Gaji ${result.data.nama} berhasil diproses`,
+                                                    showConfirmButton: false,
+                                                    timer: 1500
+                                                });
+
+                                                // Update UI
+                                                updateStatusGajiUI(selectedEmployeeData.id);
+                                                
                                             } catch (error) {
                                                 console.error('Error:', error);
-                                                alert('Error: ' + error.message);
+                                                Swal.fire({
+                                                    icon: 'error',
+                                                    title: 'Gagal',
+                                                    text: error.message || 'Terjadi kesalahan saat memproses gaji',
+                                                });
+                                            } finally {
+                                                btn.disabled = false;
+                                                btn.textContent = 'Proses Ambil Gaji';
                                             }
                                         });
+
+                                        // Fungsi untuk update UI
+                                        function updateStatusGajiUI(employeeId) {
+                                            // Update checkbox
+                                            document.querySelectorAll(`.check-item[value="${employeeId}"]`).forEach(el => {
+                                                el.dataset.status = 'sudah diambil';
+                                                el.checked = false;
+                                            });
+                                            
+                                            // Update status di tabel
+                                            document.querySelectorAll(`tr[data-employee="${employeeId}"] .status-gaji`).forEach(el => {
+                                                el.textContent = 'sudah diambil';
+                                                el.classList.add('text-success');
+                                                el.classList.remove('text-danger');
+                                            });
+                                            
+                                            // Reset selection
+                                            document.getElementById('checkAll').checked = false;
+                                            selectedEmployeeData = { id: null, nama: null, items: [], totalGaji: 0 };
+                                            updateAksiTerpilih();
+                                        }
                                     }
 
-                                    // Jalankan saat DOM siap
-                                    document.addEventListener('DOMContentLoaded', function() {
-                                        // Pastikan Firebase sudah diinisialisasi
+                                    // Inisialisasi Firebase dan event
+                                    document.addEventListener('DOMContentLoaded', function () {
                                         if (!firebase.apps.length) {
                                             const firebaseConfig = {
                                                 apiKey: "YOUR_API_KEY",
                                                 authDomain: "YOUR_AUTH_DOMAIN",
-                                                databaseURL: "YOUR_DATABASE_URL",
+                                                databaseURL: "https://facerecognition-c8264-default-rtdb.firebaseio.com/",
                                                 projectId: "YOUR_PROJECT_ID",
                                                 storageBucket: "YOUR_STORAGE_BUCKET",
                                                 messagingSenderId: "YOUR_SENDER_ID",
@@ -510,7 +551,7 @@
                                             };
                                             firebase.initializeApp(firebaseConfig);
                                         }
-                                        
+
                                         initEventListeners();
                                         updateAksiTerpilih();
                                     });
