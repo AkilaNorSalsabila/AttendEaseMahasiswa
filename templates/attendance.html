@@ -98,7 +98,8 @@
                                         <th>Jam Masuk</th>
                                         <th>Jam Pulang</th>
                                         <th>Status</th>
-                                        <th>Bukti</th>
+                                        <th>Bukti Hadir</th>
+                                        <th>Bukti Pulang</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -111,12 +112,20 @@
                                         <td>{{ a.jam_pulang }}</td>
                                         <td>{{ a.status }}</td>
                                         <td>
-                                            {% if a.image_url %}
-                                            <a href="{{ a.image_url }}" target="_blank">
-                                                <img src="{{ a.image_url }}" alt="Bukti" class="img-thumbnail">
+                                            {% if a.bukti_masuk %}
+                                            <a href="{{ a.bukti_masuk }}" target="_blank">
+                                                <img src="{{ a.bukti_masuk }}" alt="Bukti Masuk" class="img-thumbnail me-1 mb-1" style="max-width: 80px;">
                                             </a>
                                             {% else %}-{% endif %}
                                         </td>
+                                        <td>
+                                            {% if a.bukti_pulang %}
+                                            <a href="{{ a.bukti_pulang }}" target="_blank">
+                                                <img src="{{ a.bukti_pulang }}" alt="Bukti Pulang" class="img-thumbnail me-1 mb-1" style="max-width: 80px;">
+                                            </a>
+                                            {% else %}-{% endif %}
+                                        </td>
+                                        
                                     </tr>
                                     {% endfor %}
                                 </tbody>
