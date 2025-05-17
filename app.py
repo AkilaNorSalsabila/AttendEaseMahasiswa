@@ -743,9 +743,6 @@ upload_dataset_to_firebase()
 #         print(f"Golongan yang dipilih: {golongan}")  # Debugging output golongan
 #         print(f"Mata Kuliah yang dipilih: {mata_kuliah}")  # Debugging output mata kuliah
 
-#         # Ambil data dari Firebase berdasarkan golongan dan mata kuliah
-#         attendance_ref = db.reference('attendance')
-#         attendance_data = attendance_ref.get() or {}
 
 #         # Ambil data jadwal untuk golongan dan mata kuliah yang dipilih
 #         golongan_mahasiswa = jadwal_data.get(golongan, {}).get(mata_kuliah, [])
