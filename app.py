@@ -881,11 +881,10 @@ upload_dataset_to_firebase()
 #KARYAWAN ATTENDANCE
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
-    data = db.get_all_attendance()  # ambil dari database
-    return render_template("attendance.html", data=data)
-
+    # Ambil data dari Firebase
+    snapshot = db.reference('attendance_karyawan').get()
+    
     attendance_list = []
-
     if snapshot:
         grouped_data = defaultdict(list)
 
