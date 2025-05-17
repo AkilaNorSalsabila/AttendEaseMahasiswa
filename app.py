@@ -32,9 +32,6 @@ dataset_path = 'DataSet'
 # Inisialisasi Firebase
 
 
-# Load model hasil fine-tuning
-model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
-
 # Load label dari file JSON
 with open('label_map.json', 'r') as f:
     labels = json.load(f)
