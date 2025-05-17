@@ -919,11 +919,8 @@ def attendance():
             attendance_list = [a for a in attendance_list if nama_filter.lower() in a['nama_karyawan'].lower()]
 
     return render_template("attendance.html", attendance_list=attendance_list)
-<<<<<<< HEAD
 
 
-=======
->>>>>>> 2465837cb013828cbc9eda8f2d33a719c56cd3cd
 @app.route('/admin/penggajian', methods=['GET', 'POST'])
 def admin_penggajian():
     if 'user' not in session:
@@ -1908,9 +1905,5 @@ def logout():
 
 # Jalankan aplikasi Flask
 if __name__ == "__main__":
-<<<<<<< HEAD
     app.run(debug=True, port=5050)
 
-=======
-    app.run(debug=True, port=5050)
->>>>>>> 2465837cb013828cbc9eda8f2d33a719c56cd3cd

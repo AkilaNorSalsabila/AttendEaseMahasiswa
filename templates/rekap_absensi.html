@@ -119,8 +119,10 @@
                                             <td>{{ attendance.jam_masuk }}</td>
                                             <td>{{ attendance.jam_pulang }}</td>
                                             <td>{{ attendance.status }}</td>
-                                            <td>{{ attendance.timestamp}}</td>
                                             <td>
+                                                {{ attendance.timestamp.split(' - ')[0] }}<br>
+                                                {{ attendance.timestamp.split(' - ')[1] }}
+                                                <td>
                                                 {% if attendance.image_url %}
                                                 <a href="{{ attendance.image_url }}" target="_blank" class="btn btn-primary btn-sm">Lihat</a>
                                                 {% else %}
