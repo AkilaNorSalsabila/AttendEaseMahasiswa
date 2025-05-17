@@ -32,15 +32,10 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 dataset_path = 'DataSet'
 
-<<<<<<< Updated upstream
 
 
 # Inisialisasi Firebase
-cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
-initialize_app(cred, {
-    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
-})
-bucket = storage.bucket('facerecognition-c8264.appspot.com')
+
 
 # Load model hasil fine-tuning
 model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
@@ -843,7 +838,7 @@ upload_dataset_to_firebase()
 #                            mata_kuliah_list=mata_kuliah_list,
 #                            golongan=golongan, mata_kuliah=mata_kuliah)
 
-<<<<<<< Updated upstream
+
 
 # @app.route('/update_attendance', methods=['POST'])
 # def update_attendance():
@@ -891,17 +886,16 @@ upload_dataset_to_firebase()
 
 #     return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan untuk NIM dan minggu yang diberikan.'}), 404
 #KARYAWAN ATTENDANCE
-=======
+
 from collections import defaultdict
 from operator import itemgetter
->>>>>>> Stashed changes
+
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
-    data = db.get_all_attendance()  # ambil dari database
-    return render_template("attendance.html", data=data)
-
+    # Ambil data dari Firebase
+    snapshot = db.reference('attendance_karyawan').get()
+    
     attendance_list = []
-
     if snapshot:
         grouped_data = defaultdict(list)
 
