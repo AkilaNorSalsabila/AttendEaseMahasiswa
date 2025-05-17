@@ -1759,6 +1759,78 @@ def rekap_absensi():
         attendance_list=karyawan_attendance
     )
 
+@app.route('/gaji_saya')
+def gaji_saya():
+    if 'karyawan' not in session:
+        return redirect('/login_karyawan')
+
+    karyawan = session['karyawan']
+    id_karyawan = karyawan['id']
+    jabatan = karyawan['jabatan']
+
+    # Ambil data kasbon
+    kasbon_ref = db.reference(f'kasbon/{id_karyawan}')
+    kasbon_data = kasbon_ref.get() or {}
+    total_kasbon = kasbon_data.get('kasbon', 0)
+
+    # Ambil gaji default
+    default_ref = db.reference('default_gaji/default')
+    default_data = default_ref.get() or {}
+    gaji_per_hadir = default_data.get('gaji', 0)
+
+    # Ambil data absensi karyawan
+    attendance_ref = db.reference('attendance_karyawan')
+    semua_absensi = attendance_ref.get() or {}
+
+    gaji_list = []
+
+    for id_jadwal, semua_data_jadwal in semua_absensi.items():
+        absensi_karyawan = semua_data_jadwal.get(id_karyawan, {})
+        timestamps = []
+
+        for record in absensi_karyawan.values():
+            raw_timestamp = record.get('timestamp', '')
+            try:
+                dt_object = datetime.strptime(raw_timestamp, "%Y-%m-%dT%H-%M-%S")
+                timestamps.append((dt_object, record))
+            except ValueError:
+                continue  # skip jika format timestamp salah
+
+        timestamps.sort()
+
+        if len(timestamps) >= 2:
+            masuk_record = timestamps[0][1]
+            pulang_record = timestamps[-1][1]
+
+            tanggal = timestamps[0][0].strftime("%Y-%m-%d")
+            waktu = timestamps[0][0].strftime("%H:%M:%S") + ' - ' + timestamps[-1][0].strftime("%H:%M:%S")
+
+            status = 'Belum di ambil'
+            total_gaji = gaji_per_hadir
+            sisa_gaji = gaji_per_hadir - total_kasbon if total_kasbon < gaji_per_hadir else 0
+
+            gaji_list.append({
+                'tanggal': tanggal,
+                'waktu': waktu,
+                'total_gaji': total_gaji,
+                'kasbon': total_kasbon,
+                'sisa_gaji': sisa_gaji,
+                'status': status
+            })
+        else:
+            # Tidak Hadir: tidak masuk ke gaji list
+            continue
+
+    gaji_list.sort(key=lambda x: x['tanggal'], reverse=True)
+
+    return render_template(
+        'gaji_saya.html',
+        karyawan=karyawan,
+        gaji_list=gaji_list,
+        total_kasbon=total_kasbon
+    )
+
+
 
 # @app.route('/check_absen_status', methods=['GET'])
 # def check_absen_status():

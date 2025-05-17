@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rekap Kehadiran</title>
+    <title>Beranda Karyawan</title>
 
     <!-- Custom fonts for this template -->
     <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
@@ -14,47 +14,21 @@
     <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
 </head>
 
-<body id="page-top">
+<div id="wrapper">
 
-    <!-- Page Wrapper -->
-    <div id="wrapper">
+  <!-- Sidebar -->
+  <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion">
+    <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/karyawan_dashboard">
+      <div class="sidebar-brand-text">KARYAWAN DASHBOARD</div>
+    </a>
+    <hr class="sidebar-divider">
+    <li class="nav-item"><a class="nav-link" href="/karyawan_dashboard"><i class="fas fa-home"></i> Dashboard</a></li>
+    <li class="nav-item active"><a class="nav-link" href="/rekap_absensi"><i class="fas fa-calendar"></i> Rekap Absensi</a></li>
+    <li class="nav-item"><a class="nav-link" href="/gaji_saya"><i class="fas fa-money-bill-wave"></i> Gaji Saya</a></li>
+    <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+  </ul>
+  <!-- End Sidebar -->
 
-        <!-- Sidebar -->
-        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-
-            <!-- Sidebar - Brand -->
-            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
-                <div class="sidebar-brand-icon rotate-n-15">
-                    <i class="fas fa-laugh-wink"></i>
-                </div>
-                <div class="sidebar-brand-text mx-3">Karyawan Dashboard</div>
-            </a>
-
-            <!-- Divider -->
-            <hr class="sidebar-divider">
-
-            <!-- Sidebar Links -->
-            <li class="nav-item">
-                <a class="nav-link" href="/karyawan_dashboard">
-                    <i class="fas fa-home"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-        
-            <li class="nav-item">
-                <a class="nav-link" href="/rekap_absensi">
-                    <i class="fas fa-list"></i>
-                    <span>Rekap Absensi</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link logout" href="/logout">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </a>
-            </li>
-        </ul>
-        <!-- End of Sidebar -->
 
         <!-- Content Wrapper -->
         <div id="content-wrapper" class="d-flex flex-column">
