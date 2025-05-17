@@ -13,6 +13,7 @@ from firebase_admin import credentials, initialize_app, db, storage
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
+from collections import defaultdict
 import re  # Tambahkan baris ini
 from flask import Flask, render_template, request, redirect, session, jsonify
 # ... import lainnya yang sudah ada
@@ -30,7 +31,11 @@ dataset_path = 'DataSet'
 
 
 # Inisialisasi Firebase
-
+cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+initialize_app(cred, {
+    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+})
+bucket = storage.bucket('facerecognition-c8264.appspot.com')
 
 # Load model hasil fine-tuning
 model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
@@ -930,51 +935,43 @@ def admin_penggajian():
     if 'user' not in session:
         return redirect('/login_admin')
 
-     # Ambil gaji default dari Firebase
+    # Ambil gaji default dari Firebase
     default_gaji_ref = db.reference('default_gaji/default')
     gaji_default_data = default_gaji_ref.get()
-    
-    # Jika belum ada, buat dengan nilai default 10000
+
     if not gaji_default_data:
         default_gaji_ref.set({'gaji': 10000})
         gaji_default = 10000
     else:
         gaji_default = gaji_default_data.get('gaji', 10000)
 
-    # Handle form submission untuk update gaji default
     if request.method == 'POST' and 'gaji_default' in request.form:
         try:
             new_gaji = int(request.form['gaji_default'])
-            # Update ke Firebase
             default_gaji_ref.update({'gaji': new_gaji})
             flash('Gaji default berhasil diupdate', 'success')
         except ValueError:
             flash('Nilai gaji harus berupa angka', 'error')
         return redirect('/admin/penggajian')
 
-    # Inisialisasi variabel
     nama_karyawan = request.form.get('nama_karyawan', '')
     tanggal_mulai = request.form.get('tanggal_mulai', '')
     tanggal_selesai = request.form.get('tanggal_selesai', '')
     attendance_list = []
 
-    # Ambil data dari Firebase
     attendance_ref = db.reference('attendance_karyawan')
     attendance_data = attendance_ref.get() or {}
 
     employees_ref = db.reference('employees')
     employees_data = employees_ref.get() or {}
 
-    # Buat daftar nama karyawan
+    # Daftar nama karyawan
     nama_karyawan_set = set()
-
-    # Dari employees
     for emp_id, emp_info in employees_data.items():
         nama = emp_info.get('nama', '-')
         if nama != "-":
             nama_karyawan_set.add(nama)
 
-    # Dari attendance_karyawan
     for jadwal_id, karyawan_data in attendance_data.items():
         for karyawan_id, records in karyawan_data.items():
             for record_id, detail in records.items():
@@ -984,7 +981,6 @@ def admin_penggajian():
 
     nama_karyawan_list = sorted(list(nama_karyawan_set))
 
-    # Fungsi konversi string -> datetime
     def str_to_date(date_str):
         try:
             return datetime.strptime(date_str, '%Y-%m-%d')
@@ -994,110 +990,262 @@ def admin_penggajian():
     tanggal_mulai_obj = str_to_date(tanggal_mulai) if tanggal_mulai else None
     tanggal_selesai_obj = str_to_date(tanggal_selesai) if tanggal_selesai else None
 
-    # Proses data absensi
+    grouped_attendance = defaultdict(list)
+
     for jadwal_id, karyawan_data in attendance_data.items():
         for karyawan_id, records in karyawan_data.items():
             for record_id, detail in records.items():
                 nama = detail.get("name", "-")
+                if nama_karyawan and nama != nama_karyawan:
+                    continue
 
-                timestamp_str = detail.get("timestamp", "-")
+                timestamp_str = detail.get("timestamp", "")
                 timestamp = None
                 if isinstance(timestamp_str, (int, float)):
                     timestamp = datetime.fromtimestamp(timestamp_str)
                 else:
                     try:
-                        # Format asli yang diharapkan
                         timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S")
                     except ValueError:
                         try:
-                            # Format dengan tanda hubung di jam: "%Y-%m-%dT%H-%M-%S"
                             timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H-%M-%S")
                         except ValueError:
-                            timestamp = datetime.now()  # fallback
+                            continue
 
-                # Filter berdasarkan nama karyawan
-                if nama_karyawan and nama != nama_karyawan:
+                if tanggal_mulai_obj and timestamp.date() < tanggal_mulai_obj.date():
+                    continue
+                if tanggal_selesai_obj and timestamp.date() > tanggal_selesai_obj.date():
                     continue
 
-                # Filter berdasarkan tanggal
-                if timestamp:  # Hanya filter jika timestamp valid
-                    if tanggal_mulai_obj and timestamp.date() < tanggal_mulai_obj.date():
-                        continue
-                    if tanggal_selesai_obj and timestamp.date() > tanggal_selesai_obj.date():
-                        continue
-
-                status = detail.get("status", "Hadir")
-                gaji = gaji_default if status == "Hadir" else 0
-
-                # Gunakan minggu_ke berdasarkan minggu dari tanggal
-                minggu_ke = timestamp.isocalendar()[1] if timestamp else '-'
-
-                attendance_list.append({
-                    "id_karyawan": karyawan_id,
-                    "nama": nama,
-                    "status": status,
-                    "timestamp": timestamp,
-                    "minggu_ke": minggu_ke,
-                    "gaji": gaji
+                grouped_attendance[(jadwal_id, nama)].append({
+                    'timestamp': timestamp,
+                    'status': detail.get('status', 'Hadir'),
+                    'karyawan_id': karyawan_id
                 })
 
-    # Urutkan berdasarkan minggu dan nama
-    attendance_list = sorted(attendance_list, key=lambda x: (str(x['minggu_ke']), x['nama']))
+    for (jadwal_id, nama), records in grouped_attendance.items():
+        records.sort(key=lambda r: r['timestamp'])
+        jumlah_presensi = len(records)
+        masuk = records[0]['timestamp'] if jumlah_presensi >= 1 else None
+        pulang = records[-1]['timestamp'] if jumlah_presensi >= 2 else None
+        minggu_ke = masuk.isocalendar()[1] if masuk else '-'
 
-    # Update gaji_default jika form dikirim
-    if request.method == 'POST':
-        gaji_default_input = request.form.get('gaji_default')
-        if gaji_default_input:
-            try:
-                gaji_default = int(gaji_default_input)
-                session['gaji_default'] = gaji_default
-            except ValueError:
-                pass
+        # Logika status dan gaji
+        status = 'Hadir' if jumlah_presensi >= 2 else 'Tidak Hadir'
+        gaji = gaji_default if status == 'Hadir' else 0
+
+        if masuk:
+            tanggal_ditampilkan = masuk.strftime('%d %B %Y')
+        elif pulang:
+            tanggal_ditampilkan = pulang.strftime('%d %B %Y')
+        else:
+            tanggal_ditampilkan = '-'
+
+        attendance_list.append({
+            "id_karyawan": records[0]['karyawan_id'],
+            "nama": nama,
+            "status": status,
+            "tanggal": tanggal_ditampilkan,
+            "minggu_ke": minggu_ke,
+            "gaji": gaji
+        })
+
+
+    attendance_list = sorted(attendance_list, key=lambda x: (str(x['minggu_ke']), x['nama']))
 
     return render_template('penggajian.html',
                          attendance_list=attendance_list,
                          nama_karyawan_list=nama_karyawan_list,
                          nama_karyawan=nama_karyawan,
                          gaji_default=gaji_default)
+    
+@app.route("/admin/ambil_kasbon", methods=["POST"])
+def ambil_kasbon():
+    data = request.get_json()
+    id_karyawan = data.get("id_karyawan")
+
+    if not id_karyawan:
+        return jsonify({"success": False, "message": "ID karyawan tidak diberikan."})
+
+    try:
+        # Akses kasbon dari Firebase berdasarkan ID
+        ref_kasbon = db.reference(f"kasbon/{id_karyawan}")
+        data_kasbon = ref_kasbon.get()
+
+        if not data_kasbon:
+            return jsonify({"success": False, "message": "Data kasbon tidak ditemukan."})
+
+        jumlah_kasbon = int(data_kasbon.get("kasbon", 0))
+        nama = data_kasbon.get("name", "-")
+        jabatan = data_kasbon.get("jabatan", "-")
+
+        return jsonify({
+            "success": True,
+            "id_karyawan": id_karyawan,
+            "kasbon": jumlah_kasbon,
+            "name": nama,
+            "jabatan": jabatan
+        })
+
+    except Exception as e:
+        print("Error saat ambil kasbon:", e)
+        return jsonify({"success": False, "message": "Terjadi kesalahan saat ambil kasbon."})
 
 @app.route('/admin/proses_ambil_gaji', methods=['POST'])
 def proses_ambil_gaji():
     if 'user' not in session:
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-    
-    data = request.get_json()
-    id_karyawan = data.get('id_karyawan')
-    total_gaji = data.get('total_gaji', 0)
-    total_kasbon = data.get('total_kasbon', 0)
-    sisa_gaji = data.get('sisa_gaji', 0)
-    
-    if not id_karyawan:
-        return jsonify({'success': False, 'message': 'ID Karyawan tidak valid'})
-    
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
     try:
-        # Simpan ke Firebase di path penggajian/{timestamp}
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        penggajian_ref = db.reference(f'penggajian/{timestamp}')
+        data = request.get_json()
+        if not data:
+            return jsonify({'status': 'error', 'message': 'Data tidak ditemukan.'}), 400
+
+        # Data utama
+        employee_id = data.get('employeeId')
+        nama = data.get('nama', '')
+        detail = data.get('detail', [])
+        total_gaji = data.get('total_gaji', 0)
+        total_kasbon = data.get('total_kasbon', 0)
+        sisa_gaji = data.get('sisa_gaji', 0)
         
+        # Waktu transaksi
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        tanggal = data.get('tanggal', datetime.now().strftime('%Y-%m-%d'))
+        
+        # Referensi Firebase
+        penggajian_ref = db.reference(f'penggajian/{employee_id}/{timestamp}')
+        histori_ref = db.reference(f'histori_penggajian/{employee_id}')
+        
+        # Data yang akan disimpan
         penggajian_data = {
-            'id_karyawan': id_karyawan,
+            'employee_id': employee_id,
+            'nama': nama,
+            'detail': detail,
             'total_gaji': total_gaji,
             'total_kasbon': total_kasbon,
             'sisa_gaji': sisa_gaji,
-            'tanggal': datetime.now().strftime('%Y-%m-%d'),
-            'status': 'Diproses',
-            'admin': session.get('user', {}).get('username', 'Unknown')
+            'status': 'sudah diambil',
+            'tanggal': tanggal,
+            'timestamp': datetime.now().isoformat()
         }
         
+        # Simpan ke dua lokasi berbeda
         penggajian_ref.set(penggajian_data)
+        histori_ref.push().set(penggajian_data)
         
-        # Update status di attendance (opsional)
-        # attendance_ref = db.reference('attendance_karyawan')
-        # ... logika update status attendance ...
+        # Update status di data attendance
+        for item in detail:
+            if 'id_jadwal' in item:
+                attendance_ref = db.reference(
+                    f"attendance_karyawan/{item['id_jadwal']}/{employee_id}"
+                )
+                attendance_data = attendance_ref.get()
+                if attendance_data:
+                    for key, val in attendance_data.items():
+                        if isinstance(val, dict):
+                            attendance_ref.child(key).update({
+                                'status_gaji': 'sudah diambil',
+                                'tanggal_penggajian': tanggal
+                            })
         
-        return jsonify({'success': True, 'message': 'Pengambilan gaji berhasil dicatat'})
+        return jsonify({
+            'status': 'success',
+            'message': 'Data penggajian berhasil disimpan',
+            'data': {
+                'employee_id': employee_id,
+                'nama': nama,
+                'total_gaji': data['total_gaji'],
+                'total_kasbon': data['total_kasbon'],
+                'sisa_gaji': data['sisa_gaji'],
+                'status': 'sudah diambil',
+                'tanggal': datetime.now().strftime('%Y-%m-%d')
+            }
+        }), 200
+        
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/proses_gaji', methods=['POST'])
+def proses_gaji():
+    try:
+        # Validasi request
+        if not request.is_json:
+            return jsonify({'success': False, 'error': 'Data harus JSON'}), 400
+            
+        data = request.get_json()
+        
+        # Validasi field wajib
+        required_fields = ['id_karyawan', 'total_gaji', 'kasbon', 'sisa_gaji', 'tanggal']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'error': f'Field {field} harus diisi'}), 400
+        
+        id_karyawan = str(data['id_karyawan']).strip()
+        if not id_karyawan:
+            return jsonify({'success': False, 'error': 'ID Karyawan tidak valid'}), 400
+            
+        try:
+            total_gaji = int(data['total_gaji'])
+            kasbon = int(data['kasbon'])
+            sisa_gaji = int(data['sisa_gaji'])
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Nilai gaji/kasbon harus angka'}), 400
+
+        tanggal_gaji = data['tanggal']
+        if not isinstance(tanggal_gaji, str) or not tanggal_gaji.strip():
+            return jsonify({'success': False, 'error': 'Tanggal tidak valid'}), 400
+
+        # Proses penyimpanan
+        now = datetime.now()
+        timestamp_str = now.strftime('%d %B %Y, %H:%M')
+        
+        # Simpan ke detail_gaji
+        detail_ref = db.reference(f'detail_gaji/{id_karyawan}')
+        new_detail_ref = detail_ref.push()
+        new_detail_ref.set({
+            'status': 'Sudah diambil',
+            'gaji': total_gaji,
+            'tanggal': tanggal_gaji,
+            'timestamp': now.timestamp(),
+            'processed_at': timestamp_str
+        })
+        
+        # Simpan ke gaji
+        gaji_ref = db.reference(f'gaji/{id_karyawan}')
+        new_gaji_ref = gaji_ref.push()
+        new_gaji_ref.set({
+            'tanggal_pengambilan': timestamp_str,
+            'total_gaji': total_gaji,
+            'kasbon': kasbon,
+            'sisa_gaji': sisa_gaji,
+            'status': 'Completed',
+            'timestamp': now.timestamp(),
+            'detail_gaji_ref': new_detail_ref.key
+        })
+        
+        return jsonify({
+            'success': True,
+            'message': 'Gaji berhasil diproses',
+            'data': {
+                'id_karyawan': id_karyawan,
+                'total_gaji': total_gaji,
+                'kasbon': kasbon,
+                'sisa_gaji': sisa_gaji,
+                'tanggal': tanggal_gaji
+            }
+        })
+        
+    except Exception as e:
+        print(f"ERROR in proses_gaji: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Terjadi kesalahan sistem',
+            'message': str(e)
+        }), 500
 
 # @app.route('/students/edit/<student_id>', methods=['POST'])
 # def edit_student(student_id):
