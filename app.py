@@ -18,7 +18,11 @@ import re  # Tambahkan baris ini
 from flask import Flask, render_template, request, redirect, session, jsonify
 # ... import lainnya yang sudah ada
 from tensorflow.keras.models import load_model
-
+from collections import defaultdict
+from datetime import datetime
+from flask import Flask, render_template, request
+import firebase_admin
+from firebase_admin import credentials, db
 
 
 app = Flask(__name__)
@@ -28,6 +32,7 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 dataset_path = 'DataSet'
 
+<<<<<<< Updated upstream
 
 
 # Inisialisasi Firebase
@@ -838,6 +843,7 @@ upload_dataset_to_firebase()
 #                            mata_kuliah_list=mata_kuliah_list,
 #                            golongan=golongan, mata_kuliah=mata_kuliah)
 
+<<<<<<< Updated upstream
 
 # @app.route('/update_attendance', methods=['POST'])
 # def update_attendance():
@@ -885,6 +891,10 @@ upload_dataset_to_firebase()
 
 #     return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan untuk NIM dan minggu yang diberikan.'}), 404
 #KARYAWAN ATTENDANCE
+=======
+from collections import defaultdict
+from operator import itemgetter
+>>>>>>> Stashed changes
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
     data = db.get_all_attendance()  # ambil dari database
@@ -893,26 +903,44 @@ def attendance():
     attendance_list = []
 
     if snapshot:
+        grouped_data = defaultdict(list)
+
         for id_jadwal, karyawan_data in snapshot.items():
             for id_karyawan, records in karyawan_data.items():
                 for record_id, details in records.items():
-                    # parsing tanggal dari timestamp
                     try:
                         dt_object = datetime.strptime(details.get("timestamp", ""), "%Y-%m-%dT%H-%M-%S")
                         tanggal = dt_object.strftime("%Y-%m-%d")
                     except:
                         tanggal = "Invalid Date"
 
-                    attendance_list.append({
-                        "id_karyawan": id_karyawan,
-                        "nama_karyawan":details.get("name", "-"),  # Kalau mau nama asli, update firebase
-                        "tanggal": tanggal,
+                    grouped_data[(id_karyawan, tanggal)].append({
                         "jam_masuk": details.get("jam_masuk", "-"),
                         "jam_pulang": details.get("jam_pulang", "-"),
-                        "status": ("Hadir" if details.get("jam_masuk") != "Tidak Diketahui" and details.get("jam_pulang") != "Tidak Diketahui"
-                                   else "Tidak Hadir"),
                         "image_url": details.get("image_url", ""),
+                        "timestamp": details.get("timestamp", ""),
+                        "name": details.get("name", "-"),
                     })
+
+        for (id_karyawan, tanggal), entries in grouped_data.items():
+            entries.sort(key=lambda x: x["timestamp"])
+
+            bukti_masuk = entries[0]["image_url"] if len(entries) > 0 else ""
+            bukti_pulang = entries[1]["image_url"] if len(entries) > 1 else ""
+
+            attendance_list.append({
+                "id_karyawan": id_karyawan,
+                "nama_karyawan": entries[0]["name"],
+                "tanggal": tanggal,
+                "jam_masuk": entries[0]["jam_masuk"],
+                "jam_pulang": entries[0]["jam_pulang"],
+                "status": (
+                    "Hadir" if entries[0]["jam_masuk"] != "Tidak Diketahui" and entries[0]["jam_pulang"] != "Tidak Diketahui"
+                    else "Tidak Hadir"
+                ),
+                "bukti_masuk": bukti_masuk,
+                "bukti_pulang": bukti_pulang,
+            })
 
     # Filtering
     if request.method == "POST":
