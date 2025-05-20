@@ -1,19 +1,17 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beranda Karyawan</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaji Saya</title>
 
-    <!-- Custom fonts for this template -->
-    <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
-
-    <!-- Custom styles for this template -->
-    <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
+  <!-- Fonts & Styles -->
+  <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
+  <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
+  <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
 </head>
-<body id="page-top">
 
+<body id="page-top">
 <div id="wrapper">
 
   <!-- Sidebar -->
@@ -23,30 +21,29 @@
     </a>
     <hr class="sidebar-divider">
     <li class="nav-item"><a class="nav-link" href="/karyawan_dashboard"><i class="fas fa-home"></i> Dashboard</a></li>
-    <li class="nav-item"><a class="nav-link" href="/rekap_absensi"><i class="fas fa-calendar"></i> Rekap Absensi</a></li>
+    <li class="nav-item"><a class="nav-link" href="/rekap_absensi"><i class="fas fa-calendar-alt"></i> Rekap Absensi</a></li>
     <li class="nav-item active"><a class="nav-link" href="/gaji_saya"><i class="fas fa-money-bill-wave"></i> Gaji Saya</a></li>
     <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
   </ul>
   <!-- End Sidebar -->
 
+  <!-- Content -->
   <div id="content-wrapper" class="d-flex flex-column">
     <div id="content">
 
-<!-- Topbar -->
-<nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
-  <ul class="navbar-nav ml-auto">
-    <li class="nav-item dropdown no-arrow">
-      <a class="nav-link dropdown-toggle" href="#" id="userDropdown">
-        <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ karyawan.name }}</span>
-        <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg" style="height: 30px;">
-      </a>
-    </li>
-  </ul>
-</nav>
-<!-- End of Topbar -->
+      <!-- Topbar -->
+      <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item dropdown no-arrow">
+            <a class="nav-link dropdown-toggle" href="#">
+              <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ karyawan.name }}</span>
+              <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg" style="height: 30px;">
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <!-- End Topbar -->
 
-
-      <!-- Content -->
       <div class="container-fluid">
         <h1 class="h3 mb-4 text-gray-800 text-center">Gaji Saya</h1>
 
@@ -65,10 +62,10 @@
           <div class="card-body">
             <div class="table-responsive">
               <table class="table table-bordered" width="100%">
-                <thead>
+                <thead class="thead-light">
                   <tr>
-                    <th>Tanggal</th>
-                    <th>Waktu</th>
+                    <th>Tanggal Gajian</th>
+                    <th>Tanggal Pengambilan</th>
                     <th>Total Gaji</th>
                     <th>Kasbon</th>
                     <th>Sisa Gaji</th>
@@ -76,18 +73,28 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for g in gaji_list %}
-                  <tr>
-                    <td>{{ g.tanggal }}</td>
-                    <td>{{ g.waktu }}</td>
-                    <td>Rp {{ "{:,.0f}".format(g.total_gaji) }}</td>
-                    <td>Rp {{ "{:,.0f}".format(g.kasbon) }}</td>
-                    <td>Rp {{ "{:,.0f}".format(g.sisa_gaji) }}</td>
-                    <td><span class="badge badge-secondary">{{ g.status }}</span></td>
-                  </tr>
+                  {% if gaji_list %}
+                    {% for g in gaji_list %}
+                    <tr>
+                      <td>{{ g.tanggal_gajian }}</td>
+                      <td>{{ g.tanggal_pengambilan }}</td>
+                      <td>Rp {{ "{:,.0f}".format(g.total_gaji) }}</td>
+                      <td>Rp {{ "{:,.0f}".format(g.kasbon) }}</td>
+                      <td>Rp {{ "{:,.0f}".format(g.sisa_gaji) }}</td>
+                      <td>
+                        {% if g.status == "sudah diambil" %}
+                          <span class="badge badge-success">Sudah diambil</span>
+                        {% else %}
+                          <span class="badge badge-secondary">Belum diambil</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
                   {% else %}
-                  <tr><td colspan="6" class="text-center">Belum ada data gaji.</td></tr>
-                  {% endfor %}
+                    <tr>
+                      <td colspan="6" class="text-center">Belum ada data gaji.</td>
+                    </tr>
+                  {% endif %}
                 </tbody>
               </table>
             </div>
@@ -95,16 +102,16 @@
         </div>
 
       </div>
-      <!-- End Content -->
-
     </div>
   </div>
 
 </div>
 
+<!-- JS -->
 <script src="/static/vendor/jquery/jquery.min.js"></script>
 <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="/static/vendor/jquery-easing/jquery.easing.min.js"></script>
 <script src="/static/js/sb-admin-2.min.js"></script>
+
 </body>
 </html>

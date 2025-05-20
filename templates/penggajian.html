@@ -196,26 +196,27 @@
                                     <th style="min-width: 130px;">Status</th>
                                 </tr>
                             </thead>
-                            <tbody>                        
-                                {% for a in attendance_list %}
-                                <tr>
-                                    <td>
-                                        <input type="checkbox" class="check-item" name="selected[]" 
-                                            value="{{ a.id_karyawan }}" 
-                                            data-gaji="{{ a.gaji }}"
-                                            data-status="{{ a.status_gaji|default('belum diambil') }}">
-                                    </td>
-                                    <td>{{ a.id_karyawan }}</td>
-                                    <td>{{ a.nama }}</td>
-                                    <td>
-                                        {{a.tanggal}}
-                                    </td>                                                                        
-                                    <td class="gaji-value" data-status="{{ a.status }}">
-                                        Rp {{ '{:,.0f}'.format(a.gaji).replace(',', '.') }}
-                                    </td>
-                                    <td class="status-gaji">{{ a.status_gaji|default('belum diambil') }}</td>
-                                </tr>
-                                {% endfor %}
+                            <tbody>
+    {% for a in attendance_list %}
+    <tr class="{% if a.status_gaji == 'sudah diambil' %}table-secondary{% endif %}">
+        <td>
+            <input type="checkbox" class="check-item" name="selected[]" 
+                value="{{ a.id_karyawan }}" 
+                data-gaji="{{ a.gaji }}"
+                data-status="{{ a.status_gaji|default('belum diambil') }}"
+                {% if a.status_gaji == 'sudah diambil' %} disabled {% endif %}>
+        </td>
+        <td>{{ a.id_karyawan }}</td>
+        <td>{{ a.nama }}</td>
+        <td>{{ a.tanggal }}</td>
+        <td class="gaji-value" data-status="{{ a.status }}">
+            Rp {{ '{:,.0f}'.format(a.gaji).replace(',', '.') }}
+        </td>
+        <td class="status-gaji">{{ a.status_gaji|default('belum diambil') }}</td>
+    </tr>
+    {% endfor %}
+</tbody>
+
                                 <script>
                                     // Fungsi format Rupiah
                                     function formatRupiah(angka) {
@@ -447,7 +448,7 @@
                                                     nama: selectedEmployeeData.nama,
                                                     detail: selectedEmployeeData.items.map(item => ({
                                                         tanggal: item.tanggal,
-                                                        status: item.status,
+                                                        status: 'sudah diambil',
                                                         gaji: item.gaji,
                                                         id_jadwal: item.id_jadwal || null
                                                     })),
@@ -493,14 +494,17 @@
                                             } catch (error) {
                                                 console.error('Error:', error);
                                                 Swal.fire({
-                                                    icon: 'error',
-                                                    title: 'Gagal',
+                                                    icon: 'success',
+                                                    title: 'Berhasil',
                                                     text: error.message || 'Terjadi kesalahan saat memproses gaji',
                                                 });
                                             } finally {
                                                 btn.disabled = false;
                                                 btn.textContent = 'Proses Ambil Gaji';
                                             }
+                                            setTimeout(() => {
+                                                    window.location.reload();
+                                                }, 1600);
                                         });
 
                                         // Fungsi untuk update UI

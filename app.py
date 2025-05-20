@@ -25,6 +25,14 @@ import firebase_admin
 from firebase_admin import credentials, db
 
 
+# Inisialisasi Firebase
+
+
+
+# Load model hasil fine-tuning
+model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
+
+
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Ganti dengan secret key yang aman
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
@@ -1048,15 +1056,33 @@ def admin_penggajian():
             tanggal_ditampilkan = pulang.strftime('%d %B %Y')
         else:
             tanggal_ditampilkan = '-'
+        status_gaji = 'belum diambil'
 
+        penggajian_ref = db.reference(f"penggajian/{records[0]['karyawan_id']}")
+        penggajian_data = penggajian_ref.get()
+
+        if penggajian_data:
+            for penggajian_item in penggajian_data.values():
+                detail_list = penggajian_item.get('detail', [])
+                for detail in detail_list:
+                    tanggal_penggajian = detail.get('tanggal', '')
+                    if tanggal_penggajian == tanggal_ditampilkan:
+                        if detail.get('status') == 'sudah diambil':
+                            status_gaji = 'sudah diambil'
+                            break
+                if status_gaji == 'sudah diambil':
+                    break
         attendance_list.append({
             "id_karyawan": records[0]['karyawan_id'],
             "nama": nama,
             "status": status,
             "tanggal": tanggal_ditampilkan,
             "minggu_ke": minggu_ke,
-            "gaji": gaji
+            "gaji": gaji,
+            "status_gaji": status_gaji
         })
+
+
 
 
     attendance_list = sorted(attendance_list, key=lambda x: (str(x['minggu_ke']), x['nama']))
@@ -1765,70 +1791,69 @@ def gaji_saya():
         return redirect('/login_karyawan')
 
     karyawan = session['karyawan']
-    id_karyawan = karyawan['id']
-    jabatan = karyawan['jabatan']
+    id_karyawan = karyawan.get('id')
 
-    # Ambil data kasbon
+    # Ambil data tambahan dari Firebase jika tidak tersedia di session
+    karyawan_ref = db.reference(f'employees/{id_karyawan}')
+    data_karyawan = karyawan_ref.get() or {}
+    nama_karyawan = data_karyawan.get('nama', 'Tidak diketahui')
+    jabatan_karyawan = data_karyawan.get('jabatan', 'Tidak diketahui')
+
+    karyawan['nama'] = nama_karyawan
+    karyawan['jabatan'] = jabatan_karyawan
+
+    # Ambil data penggajian
+    gaji_ref = db.reference(f"penggajian/{id_karyawan}")
+    data_gaji = gaji_ref.get() or {}
+
+    riwayat_gaji = []
+
+    for timestamp_key, record in data_gaji.items():
+        detail_list = record.get('detail', [])
+        if isinstance(detail_list, list):
+            for item in detail_list:
+                tanggal_gajian = item.get('tanggal', '-')
+                status = item.get('status', '-')
+                total_gaji = item.get('gaji', 0)
+                sisa_gaji = item.get('sisa_gaji', 0)
+                kasbon = total_gaji - sisa_gaji if sisa_gaji else 0
+
+                waktu = timestamp_key.split('_')[1] if '_' in timestamp_key else '-'
+                tanggal_pengambilan = timestamp_key.split('_')[0] if '_' in timestamp_key else '-'
+
+                riwayat_gaji.append({
+                    'tanggal_gajian': tanggal_gajian,
+                    'tanggal_pengambilan': datetime.strptime(tanggal_pengambilan, "%Y%m%d").strftime("%d %B %Y") if tanggal_pengambilan.isdigit() else '-',
+                    'waktu': waktu,
+                    'total_gaji': total_gaji,
+                    'kasbon': kasbon,
+                    'sisa_gaji': sisa_gaji,
+                    'status': status
+                })
+
+    # Ambil total kasbon
+    total_kasbon = 0
     kasbon_ref = db.reference(f'kasbon/{id_karyawan}')
-    kasbon_data = kasbon_ref.get() or {}
-    total_kasbon = kasbon_data.get('kasbon', 0)
-
-    # Ambil gaji default
-    default_ref = db.reference('default_gaji/default')
-    default_data = default_ref.get() or {}
-    gaji_per_hadir = default_data.get('gaji', 0)
-
-    # Ambil data absensi karyawan
-    attendance_ref = db.reference('attendance_karyawan')
-    semua_absensi = attendance_ref.get() or {}
-
-    gaji_list = []
-
-    for id_jadwal, semua_data_jadwal in semua_absensi.items():
-        absensi_karyawan = semua_data_jadwal.get(id_karyawan, {})
-        timestamps = []
-
-        for record in absensi_karyawan.values():
-            raw_timestamp = record.get('timestamp', '')
+    kasbon_data = kasbon_ref.get()
+    if kasbon_data and isinstance(kasbon_data, dict):
+        for kasbon_item in kasbon_data.values():
             try:
-                dt_object = datetime.strptime(raw_timestamp, "%Y-%m-%dT%H-%M-%S")
-                timestamps.append((dt_object, record))
-            except ValueError:
-                continue  # skip jika format timestamp salah
-
-        timestamps.sort()
-
-        if len(timestamps) >= 2:
-            masuk_record = timestamps[0][1]
-            pulang_record = timestamps[-1][1]
-
-            tanggal = timestamps[0][0].strftime("%Y-%m-%d")
-            waktu = timestamps[0][0].strftime("%H:%M:%S") + ' - ' + timestamps[-1][0].strftime("%H:%M:%S")
-
-            status = 'Belum di ambil'
-            total_gaji = gaji_per_hadir
-            sisa_gaji = gaji_per_hadir - total_kasbon if total_kasbon < gaji_per_hadir else 0
-
-            gaji_list.append({
-                'tanggal': tanggal,
-                'waktu': waktu,
-                'total_gaji': total_gaji,
-                'kasbon': total_kasbon,
-                'sisa_gaji': sisa_gaji,
-                'status': status
-            })
-        else:
-            # Tidak Hadir: tidak masuk ke gaji list
-            continue
-
-    gaji_list.sort(key=lambda x: x['tanggal'], reverse=True)
+                if isinstance(kasbon_item, dict):
+                    total_kasbon += int(kasbon_item.get('jumlah', 0))
+                else:
+                    total_kasbon += int(kasbon_item)
+            except:
+                continue
 
     return render_template(
         'gaji_saya.html',
         karyawan=karyawan,
-        gaji_list=gaji_list,
+        gaji_list=riwayat_gaji,
         total_kasbon=total_kasbon
     )
+
+
+
 
 
 
