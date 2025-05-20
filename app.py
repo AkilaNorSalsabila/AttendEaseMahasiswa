@@ -26,7 +26,7 @@ from firebase_admin import credentials, db
 
 
 # Inisialisasi Firebase
-cred = credentials.Certificate("C:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
 initialize_app(cred, {
     'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
 })
@@ -51,9 +51,9 @@ with open('label_map.json', 'r') as f:
     labels = json.load(f)
 
 # Path dataset
-dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
+dataset_path = "C:/tugas/AttendEaseMahasiswa\DataSet"
 
-test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
+test_dataset_path = "C:/tugas/AttendEaseMahasiswa/DataTest"
 
 faceDeteksi = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
 # Fungsi untuk mengunggah dataset manual ke Firebase
@@ -1187,9 +1187,14 @@ def proses_ambil_gaji():
                                 'tanggal_penggajian': tanggal
                             })
         
+        # Jika ada kasbon, update kasbon jadi 0
+        if total_kasbon > 0:
+            kasbon_ref = db.reference(f'kasbon/{employee_id}/kasbon')
+            kasbon_ref.set(0)
+        
         return jsonify({
             'status': 'success',
-            'message': 'Data penggajian berhasil disimpan',
+            'message': 'Data penggajian berhasil disimpan dan kasbon telah dilunasi',
             'data': {
                 'employee_id': employee_id,
                 'nama': nama,
@@ -1197,7 +1202,8 @@ def proses_ambil_gaji():
                 'total_kasbon': data['total_kasbon'],
                 'sisa_gaji': data['sisa_gaji'],
                 'status': 'sudah diambil',
-                'tanggal': datetime.now().strftime('%Y-%m-%d')
+                'tanggal': datetime.now().strftime('%Y-%m-%d'),
+                'kasbon_updated': True  # Flag untuk menunjukkan kasbon sudah diupdate
             }
         }), 200
         
@@ -1943,8 +1949,8 @@ def train():
             import json
 
             # Konfigurasi dataset
-            dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
-            test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
+            dataset_path = "C:/tugas/AttendEaseMahasiswa/DataSet"
+            test_dataset_path = "C:/tugas/AttendEaseMahasiswa/DataTest"
             img_size = (224, 224)
             batch_size = 32
 
