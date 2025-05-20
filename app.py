@@ -26,7 +26,11 @@ from firebase_admin import credentials, db
 
 
 # Inisialisasi Firebase
-
+cred = credentials.Certificate("C:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+initialize_app(cred, {
+    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+})
+bucket = storage.bucket('facerecognition-c8264.appspot.com')
 
 
 # Load model hasil fine-tuning
