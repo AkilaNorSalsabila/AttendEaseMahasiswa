@@ -25,6 +25,18 @@ import firebase_admin
 from firebase_admin import credentials, db
 
 
+# Inisialisasi Firebase
+cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+initialize_app(cred, {
+    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+})
+bucket = storage.bucket('facerecognition-c8264.appspot.com')
+
+
+# Load model hasil fine-tuning
+model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
+
+
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Ganti dengan secret key yang aman
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
@@ -34,20 +46,14 @@ dataset_path = 'DataSet'
 
 
 
-# Inisialisasi Firebase
-
-
-# Load model hasil fine-tuning
-model = tf.keras.models.load_model('models/best_finetuned_model_mobilenet.keras')
-
 # Load label dari file JSON
 with open('label_map.json', 'r') as f:
     labels = json.load(f)
 
 # Path dataset
-dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
+dataset_path = "C:/tugas/AttendEaseMahasiswa\DataSet"
 
-test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
+test_dataset_path = "C:/tugas/AttendEaseMahasiswa/DataTest"
 
 faceDeteksi = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
 # Fungsi untuk mengunggah dataset manual ke Firebase
@@ -749,9 +755,6 @@ upload_dataset_to_firebase()
 #         print(f"Golongan yang dipilih: {golongan}")  # Debugging output golongan
 #         print(f"Mata Kuliah yang dipilih: {mata_kuliah}")  # Debugging output mata kuliah
 
-#         # Ambil data dari Firebase berdasarkan golongan dan mata kuliah
-#         attendance_ref = db.reference('attendance')
-#         attendance_data = attendance_ref.get() or {}
 
 #         # Ambil data jadwal untuk golongan dan mata kuliah yang dipilih
 #         golongan_mahasiswa = jadwal_data.get(golongan, {}).get(mata_kuliah, [])
@@ -839,7 +842,6 @@ upload_dataset_to_firebase()
 #                            golongan=golongan, mata_kuliah=mata_kuliah)
 
 
-
 # @app.route('/update_attendance', methods=['POST'])
 # def update_attendance():
 #     """
@@ -886,10 +888,6 @@ upload_dataset_to_firebase()
 
 #     return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan untuk NIM dan minggu yang diberikan.'}), 404
 #KARYAWAN ATTENDANCE
-
-from collections import defaultdict
-from operator import itemgetter
-
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
     # Ambil data dari Firebase
@@ -1062,15 +1060,33 @@ def admin_penggajian():
             tanggal_ditampilkan = pulang.strftime('%d %B %Y')
         else:
             tanggal_ditampilkan = '-'
+        status_gaji = 'belum diambil'
 
+        penggajian_ref = db.reference(f"penggajian/{records[0]['karyawan_id']}")
+        penggajian_data = penggajian_ref.get()
+
+        if penggajian_data:
+            for penggajian_item in penggajian_data.values():
+                detail_list = penggajian_item.get('detail', [])
+                for detail in detail_list:
+                    tanggal_penggajian = detail.get('tanggal', '')
+                    if tanggal_penggajian == tanggal_ditampilkan:
+                        if detail.get('status') == 'sudah diambil':
+                            status_gaji = 'sudah diambil'
+                            break
+                if status_gaji == 'sudah diambil':
+                    break
         attendance_list.append({
             "id_karyawan": records[0]['karyawan_id'],
             "nama": nama,
             "status": status,
             "tanggal": tanggal_ditampilkan,
             "minggu_ke": minggu_ke,
-            "gaji": gaji
+            "gaji": gaji,
+            "status_gaji": status_gaji
         })
+
+
 
 
     attendance_list = sorted(attendance_list, key=lambda x: (str(x['minggu_ke']), x['nama']))
@@ -1171,9 +1187,14 @@ def proses_ambil_gaji():
                                 'tanggal_penggajian': tanggal
                             })
         
+        # Jika ada kasbon, update kasbon jadi 0
+        if total_kasbon > 0:
+            kasbon_ref = db.reference(f'kasbon/{employee_id}/kasbon')
+            kasbon_ref.set(0)
+        
         return jsonify({
             'status': 'success',
-            'message': 'Data penggajian berhasil disimpan',
+            'message': 'Data penggajian berhasil disimpan dan kasbon telah dilunasi',
             'data': {
                 'employee_id': employee_id,
                 'nama': nama,
@@ -1181,7 +1202,8 @@ def proses_ambil_gaji():
                 'total_kasbon': data['total_kasbon'],
                 'sisa_gaji': data['sisa_gaji'],
                 'status': 'sudah diambil',
-                'tanggal': datetime.now().strftime('%Y-%m-%d')
+                'tanggal': datetime.now().strftime('%Y-%m-%d'),
+                'kasbon_updated': True  # Flag untuk menunjukkan kasbon sudah diupdate
             }
         }), 200
         
@@ -1773,6 +1795,77 @@ def rekap_absensi():
         attendance_list=karyawan_attendance
     )
 
+@app.route('/gaji_saya')
+def gaji_saya():
+    if 'karyawan' not in session:
+        return redirect('/login_karyawan')
+
+    karyawan = session['karyawan']
+    id_karyawan = karyawan.get('id')
+
+    # Ambil data tambahan dari Firebase jika tidak tersedia di session
+    karyawan_ref = db.reference(f'employees/{id_karyawan}')
+    data_karyawan = karyawan_ref.get() or {}
+    nama_karyawan = data_karyawan.get('nama', 'Tidak diketahui')
+    jabatan_karyawan = data_karyawan.get('jabatan', 'Tidak diketahui')
+
+    karyawan['nama'] = nama_karyawan
+    karyawan['jabatan'] = jabatan_karyawan
+
+    # Ambil data penggajian
+    gaji_ref = db.reference(f"penggajian/{id_karyawan}")
+    data_gaji = gaji_ref.get() or {}
+
+    riwayat_gaji = []
+
+    for timestamp_key, record in data_gaji.items():
+        detail_list = record.get('detail', [])
+        if isinstance(detail_list, list):
+            for item in detail_list:
+                tanggal_gajian = item.get('tanggal', '-')
+                status = item.get('status', '-')
+                total_gaji = item.get('gaji', 0)
+                sisa_gaji = item.get('sisa_gaji', 0)
+                kasbon = total_gaji - sisa_gaji if sisa_gaji else 0
+
+                waktu = timestamp_key.split('_')[1] if '_' in timestamp_key else '-'
+                tanggal_pengambilan = timestamp_key.split('_')[0] if '_' in timestamp_key else '-'
+
+                riwayat_gaji.append({
+                    'tanggal_gajian': tanggal_gajian,
+                    'tanggal_pengambilan': datetime.strptime(tanggal_pengambilan, "%Y%m%d").strftime("%d %B %Y") if tanggal_pengambilan.isdigit() else '-',
+                    'waktu': waktu,
+                    'total_gaji': total_gaji,
+                    'kasbon': kasbon,
+                    'sisa_gaji': sisa_gaji,
+                    'status': status
+                })
+
+    # Ambil total kasbon
+    total_kasbon = 0
+    kasbon_ref = db.reference(f'kasbon/{id_karyawan}')
+    kasbon_data = kasbon_ref.get()
+    if kasbon_data and isinstance(kasbon_data, dict):
+        for kasbon_item in kasbon_data.values():
+            try:
+                if isinstance(kasbon_item, dict):
+                    total_kasbon += int(kasbon_item.get('jumlah', 0))
+                else:
+                    total_kasbon += int(kasbon_item)
+            except:
+                continue
+
+    return render_template(
+        'gaji_saya.html',
+        karyawan=karyawan,
+        gaji_list=riwayat_gaji,
+        total_kasbon=total_kasbon
+    )
+
+
+
+
+
 
 # @app.route('/check_absen_status', methods=['GET'])
 # def check_absen_status():
@@ -1856,8 +1949,8 @@ def train():
             import json
 
             # Konfigurasi dataset
-            dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
-            test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
+            dataset_path = "C:/tugas/AttendEaseMahasiswa/DataSet"
+            test_dataset_path = "C:/tugas/AttendEaseMahasiswa/DataTest"
             img_size = (224, 224)
             batch_size = 32
 

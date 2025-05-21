@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
   <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
   <link href="/static/css/styles.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 
 <body id="page-top" onload="startCamera(); getLastEmployeeId();">
@@ -21,20 +22,17 @@
     <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
 
       <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
-          <div class="sidebar-brand-icon rotate-n-15">
-              <i class="fas fa-laugh-wink"></i>
-          </div>
           <div class="sidebar-brand-text mx-3">Admin Dashboard</div>
       </a>
 
       <hr class="sidebar-divider">
 
       <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="fas fa-database"></i><span>Beranda</span></a></li>
-      <li class="nav-item"><a class="nav-link" href="/dataset"><i class="fas fa-database"></i><span>Tambah Dataset</span></a></li>
+      <li class="nav-item active"><a class="nav-link" href="/dataset"><i class="fas fa-database"></i><span>Tambah Dataset</span></a></li>
       <li class="nav-item"><a class="nav-link" href="/train"><i class="fas fa-brain"></i><span>Pelatihan Model</span></a></li>
       <li class="nav-item"><a class="nav-link" href="/attendance"><i class="fas fa-list"></i><span>Kehadiran Karyawan</span></a></li>
       <li class="nav-item"><a class="nav-link" href="/admin/jadwal_kerja"><i class="fas fa-calendar"></i><span>Jadwal Kerja</span></a></li>
-      <li class="nav-item active">
+      <li class="nav-item">
         <a class="nav-link" href="/admin/penggajian">
             <i class="fas fa-calendar"></i>
             <span>Penggajian</span>
@@ -127,7 +125,7 @@
   <!-- ========= CUSTOM SCRIPT ========= -->
   <script>
     /* GLOBAL */
-    let captureCount = 0, stream = null, maxImages = 10;
+    let captureCount = 0, stream = null, maxImages = 5;
 
     async function startCamera() {
       try {
