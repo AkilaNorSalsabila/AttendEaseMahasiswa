@@ -24,6 +24,20 @@ from flask import Flask, render_template, request
 import firebase_admin
 from firebase_admin import credentials, db
 
+# Inisialisasi Firebase
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Ganti dengan secret key yang aman
+app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
+
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+dataset_path = 'DataSet'
+
+cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+
+initialize_app(cred, {
+    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
+    'storageBucket': 'facerecognition-c8264.appspot.com'  # Menambahkan storageBucket
+})
 
 
 
@@ -45,9 +59,9 @@ with open('label_map.json', 'r') as f:
     labels = json.load(f)
 
 # Path dataset
-dataset_path = "C:/tugas/AttendEaseMahasiswa\DataSet"
+dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
 
-test_dataset_path = "C:/tugas/AttendEaseMahasiswa/DataTest"
+test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
 
 faceDeteksi = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
 # Fungsi untuk mengunggah dataset manual ke Firebase
@@ -1568,117 +1582,7 @@ def set_absensi():
 
     return render_template('set_absensi.html', message=None)
     
-# @app.route('/absen', methods=['GET'])
-# def absen():
-#     if 'karyawan' not in session:
-#         flash('Silakan login terlebih dahulu', 'warning')
-#         return redirect('/login_karyawan')
 
-#     karyawan = session['karyawan']
-    
-#     return render_template('absen.html', karyawan=karyawan)
-
-# def run_face_recognition(user_id):
-#     """
-#     Fungsi untuk deteksi wajah dan menyimpan data absensi.
-#     """
-#     username_full = labels.get(user_id, "Unknown")
-#     username = username_full.split("", 1)[1] if "" in username_full else username_full
-
-#     video = cv2.VideoCapture(0)
-#     if not video.isOpened():
-#         print("[ERROR] Kamera tidak dapat dibuka. Pastikan kamera tersedia.")
-#         return
-
-#     face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-
-#     locked_label = "Unknown"
-#     lock_frames = 0
-#     threshold_confidence = 0.75
-#     min_consecutive_frames = 5
-#     attendance_logged = False
-
-#     print("[INFO] Mulai deteksi wajah...")
-#     while True:
-#         ret, frame = video.read()
-#         if not ret:
-#             print("[ERROR] Tidak dapat membaca frame dari kamera.")
-#             break
-
-#         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#         faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
-#         if len(faces) == 0:
-#             print("[INFO] Tidak ada wajah yang terdeteksi.")
-#         else:
-#             print(f"[INFO] {len(faces)} wajah terdeteksi.")
-
-#         for (x, y, w, h) in faces:
-#             face_img = frame[y:y + h, x:x + w]
-#             face_img = cv2.resize(face_img, (224, 224))
-#             face_img = np.expand_dims(face_img, axis=0) / 255.0
-
-#             prediction = model.predict(face_img)
-#             confidence = float(np.max(prediction[0]))
-#             id_detected = str(np.argmax(prediction[0]) + 1)
-
-#             print(f"[DEBUG] Deteksi: ID={id_detected}, Confidence={confidence:.2f}, Lock frames={lock_frames}")
-
-#             if confidence >= threshold_confidence and id_detected == user_id:
-#                 lock_frames += 1
-#                 if lock_frames >= min_consecutive_frames and not attendance_logged:
-#                     try:
-#                         # Simpan frame sebagai gambar
-#                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-#                         image_path = f"attendance_{user_id}_{timestamp}.jpg"
-#                         cv2.imwrite(image_path, frame)
-#                         print("[INFO] Gambar berhasil disimpan:", image_path)
-
-#                         # Unggah gambar ke Firebase Storage
-#                         try:
-#                             blob = bucket.blob(f'attendance_images/{image_path}')
-#                             blob.upload_from_filename(image_path)
-#                             blob.make_public()
-#                             image_url = blob.public_url
-#                             print("[SUCCESS] Gambar berhasil diunggah ke Firebase Storage. URL:", image_url)
-#                         except Exception as e:
-#                             print("[ERROR] Gagal mengunggah gambar ke Firebase Storage:", str(e))
-#                             continue
-
-#                         # Simpan data ke Firebase Realtime Database
-#                         try:
-#                             attendance_data = {
-#                                 'user_id': user_id,
-#                                 'username': username,
-#                                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-#                                 'confidence': confidence,
-#                                 'image_url': image_url
-#                             }
-#                             db.reference(f'attendance/{user_id}').push(attendance_data)
-#                             print("[SUCCESS] Data presensi berhasil disimpan:", attendance_data)
-#                         except Exception as e:
-#                             print("[ERROR] Gagal menyimpan data ke Firebase Realtime Database:", str(e))
-#                             continue
-
-#                         # Hapus gambar lokal
-#                         os.remove(image_path)
-#                         print("[INFO] Gambar lokal dihapus:", image_path)
-
-#                         attendance_logged = True  # Tandai presensi sudah tercatat
-#                         break  # Keluar dari loop setelah presensi berhasil
-#                     except Exception as e:
-#                         print("[ERROR] Terjadi kesalahan saat mencatat presensi:", str(e))
-#             else:
-#                 lock_frames = 0
-
-#         if attendance_logged:
-#                  print("[INFO] Presensi selesai, keluar dari loop.")
-#                  break
-
-#     video.release()
-#     cv2.destroyAllWindows()
-#     if not attendance_logged:
-#         print("[ERROR] Presensi tidak tercatat. Pastikan wajah terlihat jelas.")
 @app.route('/rekap_absensi', methods=['GET', 'POST'])
 def rekap_absensi():
     if 'karyawan' not in session:
@@ -1789,7 +1693,6 @@ def rekap_absensi():
         attendance_list=karyawan_attendance
     )
 
-
 @app.route('/gaji_saya')
 def gaji_saya():
     if 'karyawan' not in session:
@@ -1804,25 +1707,24 @@ def gaji_saya():
     karyawan['nama'] = data_karyawan.get('nama', 'Tidak diketahui')
     karyawan['jabatan'] = data_karyawan.get('jabatan', 'Tidak diketahui')
 
-    # Ambil gaji default
+    # Gaji default per hari
     gaji_per_hari = db.reference('default_gaji/default/gaji').get() or 0
 
-    # Ambil total kasbon dari node kasbon/
+    # Kasbon
     kasbon_ref = db.reference(f'kasbon/{id_karyawan}')
     kasbon_data = kasbon_ref.get() or {}
     kasbon_karyawan = 0
-    if isinstance(kasbon_data, dict):
-        kasbon_karyawan = int(kasbon_data.get('kasbon', 0))
-
     total_kasbon = 0
     if isinstance(kasbon_data, dict):
         for val in kasbon_data.values():
             try:
-                total_kasbon += int(val.get('jumlah', 0)) if isinstance(val, dict) else int(val)
+                jumlah = int(val.get('jumlah', 0)) if isinstance(val, dict) else int(val)
+                total_kasbon += jumlah
             except:
                 continue
+        kasbon_karyawan = total_kasbon
 
-    # Ambil data penggajian
+    # Data penggajian
     penggajian_ref = db.reference(f'penggajian/{id_karyawan}')
     data_penggajian = penggajian_ref.get() or {}
     tanggal_sudah_diambil = set()
@@ -1836,9 +1738,31 @@ def gaji_saya():
             continue
 
         for detail in detail_list:
-            tanggal_gajian = detail.get('tanggal', '-')
-            if tanggal_gajian and tanggal_gajian != '-':
+            status = detail.get('status', '-')
+            try:
+                total_gaji = int(item.get('total_gaji') or detail.get('gaji') or 0)
+            except:
+                total_gaji = 0
+
+            try:
+                total_kasbon_entry = int(item.get('total_kasbon', 0))
+            except:
+                total_kasbon_entry = 0
+
+            # Tanggal gajian dalam format yang bisa dibandingkan ke attendance
+            tanggal_str = detail.get('tanggal', '-')
+            try:
+                tanggal_gajian = datetime.strptime(tanggal_str, "%d %B %Y").strftime("%Y-%m-%d")
+            except:
+                tanggal_gajian = '-'
+
+            if status == 'sudah diambil':
                 tanggal_sudah_diambil.add(tanggal_gajian)
+
+            try:
+                sisa_gaji = int(detail.get('sisa_gaji', total_gaji - total_kasbon_entry))
+            except:
+                sisa_gaji = total_gaji - total_kasbon_entry
 
             try:
                 tanggal_pengambilan = datetime.strptime(key.split('_')[0], "%Y%m%d").strftime("%d %B %Y")
@@ -1846,24 +1770,6 @@ def gaji_saya():
                 tanggal_pengambilan = '-'
 
             waktu = key.split('_')[1] if '_' in key else '-'
-
-            status = detail.get('status', '-')
-            try:
-                total_gaji = int(detail.get('total_gaji') or detail.get('gaji') or 0)
-            except:
-                total_gaji = 0
-
-            # Terapkan try-except untuk total_kasbon
-            try:
-                total_kasbon_entry = int(detail.get('total_kasbon', 0))
-            except:
-                total_kasbon_entry = 0
-
-            # Terapkan try-except untuk sisa_gaji
-            try:
-                sisa_gaji = int(detail.get('sisa_gaji', total_gaji - total_kasbon_entry))
-            except:
-                sisa_gaji = total_gaji - total_kasbon_entry
 
             riwayat_gaji.append({
                 'tanggal_gajian': tanggal_gajian,
@@ -1875,7 +1781,8 @@ def gaji_saya():
                 'status': status
             })
 
-    # Ambil data attendance dan kelompokkan per tanggal
+
+    # Attendance Harian
     attendance_ref = db.reference('attendance_karyawan')
     attendance_data = attendance_ref.get() or {}
     presensi_harian = defaultdict(list)
@@ -1891,28 +1798,43 @@ def gaji_saya():
                 except:
                     continue
 
-    # Tambahkan entri "belum diambil"
+    # Tambahkan gaji belum diambil dari presensi (jika tanggal belum pernah digaji)
+    gaji_belum_diambil = []
     for tanggal, entry_list in presensi_harian.items():
         if len(entry_list) >= 2 and tanggal not in tanggal_sudah_diambil:
-            sisa_gaji = max(0, gaji_per_hari - kasbon_karyawan)
-            riwayat_gaji.append({
+            gaji_belum_diambil.append({
                 'tanggal_gajian': tanggal,
                 'tanggal_pengambilan': '-',
                 'waktu': '-',
                 'total_gaji': gaji_per_hari,
-                'kasbon': kasbon_karyawan,
-                'sisa_gaji': sisa_gaji,
+                'kasbon': 0,  # kasbon hanya dikurangkan sekali di akhir
+                'sisa_gaji': gaji_per_hari,
                 'status': 'belum diambil'
             })
 
-    # Urutkan dari terbaru ke terlama
+    # Akumulasi total gaji dari yang belum diambil
+    total_belum_diambil = sum(g['total_gaji'] for g in gaji_belum_diambil)
+    if total_belum_diambil:
+        sisa_belum_diambil = max(0, total_belum_diambil - kasbon_karyawan)
+        riwayat_gaji.append({
+            'tanggal_gajian': '-',
+            'tanggal_pengambilan': '-',
+            'waktu': '-',
+            'total_gaji': total_belum_diambil,
+            'kasbon': kasbon_karyawan,
+            'sisa_gaji': sisa_belum_diambil,
+            'status': 'belum diambil'
+        })
+
+    # Urutkan dari yang terbaru ke terlama
     def parse_tanggal(item):
         try:
             return datetime.strptime(item['tanggal_gajian'], "%Y-%m-%d")
         except:
             return datetime.min
+        
 
-    riwayat_gaji.sort(key=parse_tanggal, reverse=True)
+    
 
     return render_template(
         'gaji_saya.html',
@@ -1920,7 +1842,6 @@ def gaji_saya():
         gaji_list=riwayat_gaji,
         total_kasbon=total_kasbon
     )
-
 # @app.route('/check_absen_status', methods=['GET'])
 # def check_absen_status():
 #     # Mendapatkan parameter dari URL
