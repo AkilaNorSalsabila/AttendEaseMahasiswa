@@ -25,12 +25,6 @@ import firebase_admin
 from firebase_admin import credentials, db
 
 
-# Inisialisasi Firebase
-cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
-initialize_app(cred, {
-    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
-})
-bucket = storage.bucket('facerecognition-c8264.appspot.com')
 
 
 # Load model hasil fine-tuning
@@ -1795,6 +1789,7 @@ def rekap_absensi():
         attendance_list=karyawan_attendance
     )
 
+
 @app.route('/gaji_saya')
 def gaji_saya():
     if 'karyawan' not in session:
@@ -1803,57 +1798,121 @@ def gaji_saya():
     karyawan = session['karyawan']
     id_karyawan = karyawan.get('id')
 
-    # Ambil data tambahan dari Firebase jika tidak tersedia di session
+    # Ambil data karyawan
     karyawan_ref = db.reference(f'employees/{id_karyawan}')
     data_karyawan = karyawan_ref.get() or {}
-    nama_karyawan = data_karyawan.get('nama', 'Tidak diketahui')
-    jabatan_karyawan = data_karyawan.get('jabatan', 'Tidak diketahui')
+    karyawan['nama'] = data_karyawan.get('nama', 'Tidak diketahui')
+    karyawan['jabatan'] = data_karyawan.get('jabatan', 'Tidak diketahui')
 
-    karyawan['nama'] = nama_karyawan
-    karyawan['jabatan'] = jabatan_karyawan
+    # Ambil gaji default
+    gaji_per_hari = db.reference('default_gaji/default/gaji').get() or 0
 
-    # Ambil data penggajian
-    gaji_ref = db.reference(f"penggajian/{id_karyawan}")
-    data_gaji = gaji_ref.get() or {}
-
-    riwayat_gaji = []
-
-    for timestamp_key, record in data_gaji.items():
-        detail_list = record.get('detail', [])
-        if isinstance(detail_list, list):
-            for item in detail_list:
-                tanggal_gajian = item.get('tanggal', '-')
-                status = item.get('status', '-')
-                total_gaji = item.get('gaji', 0)
-                sisa_gaji = item.get('sisa_gaji', 0)
-                kasbon = total_gaji - sisa_gaji if sisa_gaji else 0
-
-                waktu = timestamp_key.split('_')[1] if '_' in timestamp_key else '-'
-                tanggal_pengambilan = timestamp_key.split('_')[0] if '_' in timestamp_key else '-'
-
-                riwayat_gaji.append({
-                    'tanggal_gajian': tanggal_gajian,
-                    'tanggal_pengambilan': datetime.strptime(tanggal_pengambilan, "%Y%m%d").strftime("%d %B %Y") if tanggal_pengambilan.isdigit() else '-',
-                    'waktu': waktu,
-                    'total_gaji': total_gaji,
-                    'kasbon': kasbon,
-                    'sisa_gaji': sisa_gaji,
-                    'status': status
-                })
-
-    # Ambil total kasbon
-    total_kasbon = 0
+    # Ambil total kasbon dari node kasbon/
     kasbon_ref = db.reference(f'kasbon/{id_karyawan}')
-    kasbon_data = kasbon_ref.get()
-    if kasbon_data and isinstance(kasbon_data, dict):
-        for kasbon_item in kasbon_data.values():
+    kasbon_data = kasbon_ref.get() or {}
+    kasbon_karyawan = 0
+    if isinstance(kasbon_data, dict):
+        kasbon_karyawan = int(kasbon_data.get('kasbon', 0))
+
+    total_kasbon = 0
+    if isinstance(kasbon_data, dict):
+        for val in kasbon_data.values():
             try:
-                if isinstance(kasbon_item, dict):
-                    total_kasbon += int(kasbon_item.get('jumlah', 0))
-                else:
-                    total_kasbon += int(kasbon_item)
+                total_kasbon += int(val.get('jumlah', 0)) if isinstance(val, dict) else int(val)
             except:
                 continue
+
+    # Ambil data penggajian
+    penggajian_ref = db.reference(f'penggajian/{id_karyawan}')
+    data_penggajian = penggajian_ref.get() or {}
+    tanggal_sudah_diambil = set()
+    riwayat_gaji = []
+
+    for key, item in data_penggajian.items():
+        detail_list = item.get('detail', [])
+        if isinstance(detail_list, dict):
+            detail_list = [detail_list]
+        elif not isinstance(detail_list, list):
+            continue
+
+        for detail in detail_list:
+            tanggal_gajian = detail.get('tanggal', '-')
+            if tanggal_gajian and tanggal_gajian != '-':
+                tanggal_sudah_diambil.add(tanggal_gajian)
+
+            try:
+                tanggal_pengambilan = datetime.strptime(key.split('_')[0], "%Y%m%d").strftime("%d %B %Y")
+            except:
+                tanggal_pengambilan = '-'
+
+            waktu = key.split('_')[1] if '_' in key else '-'
+
+            status = detail.get('status', '-')
+            try:
+                total_gaji = int(detail.get('total_gaji') or detail.get('gaji') or 0)
+            except:
+                total_gaji = 0
+
+            # Terapkan try-except untuk total_kasbon
+            try:
+                total_kasbon_entry = int(detail.get('total_kasbon', 0))
+            except:
+                total_kasbon_entry = 0
+
+            # Terapkan try-except untuk sisa_gaji
+            try:
+                sisa_gaji = int(detail.get('sisa_gaji', total_gaji - total_kasbon_entry))
+            except:
+                sisa_gaji = total_gaji - total_kasbon_entry
+
+            riwayat_gaji.append({
+                'tanggal_gajian': tanggal_gajian,
+                'tanggal_pengambilan': tanggal_pengambilan,
+                'waktu': waktu,
+                'total_gaji': total_gaji,
+                'kasbon': total_kasbon_entry,
+                'sisa_gaji': sisa_gaji,
+                'status': status
+            })
+
+    # Ambil data attendance dan kelompokkan per tanggal
+    attendance_ref = db.reference('attendance_karyawan')
+    attendance_data = attendance_ref.get() or {}
+    presensi_harian = defaultdict(list)
+
+    for jadwal_id, karyawan_data in attendance_data.items():
+        if id_karyawan in karyawan_data:
+            for record_id, detail in karyawan_data[id_karyawan].items():
+                timestamp_str = detail.get('timestamp')
+                try:
+                    tgl_obj = datetime.strptime(timestamp_str, "%Y-%m-%dT%H-%M-%S")
+                    tanggal_str = tgl_obj.strftime("%Y-%m-%d")
+                    presensi_harian[tanggal_str].append(tgl_obj)
+                except:
+                    continue
+
+    # Tambahkan entri "belum diambil"
+    for tanggal, entry_list in presensi_harian.items():
+        if len(entry_list) >= 2 and tanggal not in tanggal_sudah_diambil:
+            sisa_gaji = max(0, gaji_per_hari - kasbon_karyawan)
+            riwayat_gaji.append({
+                'tanggal_gajian': tanggal,
+                'tanggal_pengambilan': '-',
+                'waktu': '-',
+                'total_gaji': gaji_per_hari,
+                'kasbon': kasbon_karyawan,
+                'sisa_gaji': sisa_gaji,
+                'status': 'belum diambil'
+            })
+
+    # Urutkan dari terbaru ke terlama
+    def parse_tanggal(item):
+        try:
+            return datetime.strptime(item['tanggal_gajian'], "%Y-%m-%d")
+        except:
+            return datetime.min
+
+    riwayat_gaji.sort(key=parse_tanggal, reverse=True)
 
     return render_template(
         'gaji_saya.html',
@@ -1861,11 +1920,6 @@ def gaji_saya():
         gaji_list=riwayat_gaji,
         total_kasbon=total_kasbon
     )
-
-
-
-
-
 
 # @app.route('/check_absen_status', methods=['GET'])
 # def check_absen_status():
