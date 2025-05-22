@@ -32,13 +32,11 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 dataset_path = 'DataSet'
 
-cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
-
+cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
 initialize_app(cred, {
     'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
     'storageBucket': 'facerecognition-c8264.appspot.com'  # Menambahkan storageBucket
 })
-
 
 
 # Load model hasil fine-tuning
@@ -375,7 +373,7 @@ def gen(user_id, jadwal_id, jam_masuk, jam_pulang):
 
                 print(f"[INFO] Expected: {user_id} | Detected: {detected_user_id} | Confidence: {confidence:.2f}")
 
-                if detected_user_id == user_id and confidence >= 0.75 and not attendance_logged:
+                if detected_user_id == user_id and confidence >= 0.50 and not attendance_logged:
                     timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
                     filename = f"att_{user_id}_{jadwal_id}_{timestamp}.jpg"
                     filepath = os.path.join(capture_dir, filename)
@@ -898,13 +896,13 @@ upload_dataset_to_firebase()
 #KARYAWAN ATTENDANCE
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
-    # Ambil data dari Firebase
     snapshot = db.reference('attendance_karyawan').get()
-    
     attendance_list = []
+    
     if snapshot:
         grouped_data = defaultdict(list)
 
+        # Kelompokkan data per karyawan per tanggal
         for id_jadwal, karyawan_data in snapshot.items():
             for id_karyawan, records in karyawan_data.items():
                 for record_id, details in records.items():
@@ -912,34 +910,49 @@ def attendance():
                         dt_object = datetime.strptime(details.get("timestamp", ""), "%Y-%m-%dT%H-%M-%S")
                         tanggal = dt_object.strftime("%Y-%m-%d")
                     except:
-                        tanggal = "Invalid Date"
+                        continue  # Lewati jika format timestamp tidak valid
 
                     grouped_data[(id_karyawan, tanggal)].append({
-                        "jam_masuk": details.get("jam_masuk", "-"),
-                        "jam_pulang": details.get("jam_pulang", "-"),
+                        "jam_masuk": details.get("jam_masuk", ""),
+                        "jam_pulang": details.get("jam_pulang", ""),
                         "image_url": details.get("image_url", ""),
-                        "timestamp": details.get("timestamp", ""),
-                        "name": details.get("name", "-"),
+                        "timestamp": dt_object,  # Simpan sebagai datetime object
+                        "name": details.get("name", ""),
                     })
 
+        # Proses status kehadiran
         for (id_karyawan, tanggal), entries in grouped_data.items():
+            # Urutkan berdasarkan timestamp
             entries.sort(key=lambda x: x["timestamp"])
-
-            bukti_masuk = entries[0]["image_url"] if len(entries) > 0 else ""
-            bukti_pulang = entries[1]["image_url"] if len(entries) > 1 else ""
+            
+            # Tentukan status berdasarkan jumlah presensi
+            if len(entries) >= 2:
+                # Ambil record pertama sebagai masuk dan terakhir sebagai pulang
+                masuk_record = entries[0]
+                pulang_record = entries[-1]
+                
+                status = "Hadir"
+                jam_masuk = masuk_record["jam_masuk"] or "-"
+                jam_pulang = pulang_record["jam_pulang"] or "-"
+                bukti_masuk = masuk_record["image_url"]
+                bukti_pulang = pulang_record["image_url"]
+            else:
+                status = "Tidak Hadir"
+                jam_masuk = entries[0]["jam_masuk"] if entries else "-"
+                jam_pulang = "-"
+                bukti_masuk = entries[0]["image_url"] if entries else ""
+                bukti_pulang = ""
 
             attendance_list.append({
                 "id_karyawan": id_karyawan,
-                "nama_karyawan": entries[0]["name"],
+                "nama_karyawan": entries[0]["name"] if entries else "-",
                 "tanggal": tanggal,
-                "jam_masuk": entries[0]["jam_masuk"],
-                "jam_pulang": entries[0]["jam_pulang"],
-                "status": (
-                    "Hadir" if entries[0]["jam_masuk"] != "Tidak Diketahui" and entries[0]["jam_pulang"] != "Tidak Diketahui"
-                    else "Tidak Hadir"
-                ),
+                "jam_masuk": jam_masuk,
+                "jam_pulang": jam_pulang,
+                "status": status,
                 "bukti_masuk": bukti_masuk,
                 "bukti_pulang": bukti_pulang,
+                "jumlah_presensi": len(entries)  # Untuk debugging
             })
 
     # Filtering
@@ -1826,15 +1839,7 @@ def gaji_saya():
             'status': 'belum diambil'
         })
 
-    # Urutkan dari yang terbaru ke terlama
-    def parse_tanggal(item):
-        try:
-            return datetime.strptime(item['tanggal_gajian'], "%Y-%m-%d")
-        except:
-            return datetime.min
-        
-
-    
+    riwayat_gaji = sorted(riwayat_gaji, key=lambda x: x['status'].lower() != 'belum diambil')
 
     return render_template(
         'gaji_saya.html',
