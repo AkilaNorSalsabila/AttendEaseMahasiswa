@@ -2,15 +2,15 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Beranda Karyawan</title>
     <!-- Custom fonts for this template -->
-    <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
+    <link href="/static/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css" />
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet" />
     <!-- Custom styles for this template -->
-    <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link href="/static/css/sb-admin-2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
     <style>
         :root {
@@ -18,21 +18,23 @@
             --secondary-color: #f8f9fc;
             --success-color: #1cc88a;
             --danger-color: #e74a3b;
+            --hover-bg: #dbe4ff;
+            --table-header-bg: #375aeb;
         }
-        
+
         body {
-            background-color: #f8f9fc;
+            background-color: var(--secondary-color);
         }
-        
+
         .sidebar {
             background: linear-gradient(180deg, var(--primary-color) 0%, #224abe 100%);
         }
-        
+
         .sidebar-brand {
             height: 4.375rem;
             text-decoration: none;
         }
-        
+
         .sidebar-brand-text {
             font-size: 1.2rem;
             font-weight: 800;
@@ -42,117 +44,120 @@
             letter-spacing: 0.05rem;
             z-index: 1;
         }
-        
+
         .card {
             border: none;
             border-radius: 0.35rem;
             box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
         }
-        
+
         .card-header {
-            background-color: #f8f9fc;
+            background-color: var(--secondary-color);
             border-bottom: 1px solid #e3e6f0;
             padding: 1rem 1.35rem;
         }
-        
-        .profile-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+
+        .table thead th {
+            background-color: #f1f3f5; /* abu-abu muda */
+            color: #495057; /* warna teks abu gelap */
+            border: 1px solid #dee2e6;
+            font-weight: 600;
         }
-        
-        .profile-info {
-            margin-bottom: 15px;
+
+        .table-bordered th,
+        .table-bordered td {
+            border: 1px solid #dee2e6 !important;
         }
-        
-        .profile-info p {
-            margin-bottom: 5px;
-            font-size: 0.9rem;
-        }
-        
+
+
+       
+
         .profile-info strong {
             color: var(--primary-color);
         }
-        
+
         .table-container {
             background: white;
             border-radius: 10px;
             padding: 20px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
         }
-        
+
         .table-title {
             color: var(--primary-color);
             font-weight: 600;
             margin-bottom: 20px;
             text-align: center;
         }
-        
+
+        .filter-container {
+            margin-bottom: 15px;
+            text-align: right;
+        }
+
+        select#filterMonth {
+            padding: 7px 12px;
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+            font-size: 0.9rem;
+            width: 180px;
+        }
+
+        button#btnFilter {
+            padding: 7px 15px;
+            border-radius: 5px;
+            border: none;
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            margin-left: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button#btnFilter:hover {
+            background-color: #2e49c8;
+        }
+
         .table-responsive {
             border-radius: 10px;
             overflow: hidden;
         }
-        
-        .table {
-            margin-bottom: 0;
-        }
-        
-        .table thead th {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            font-weight: 600;
-            padding: 12px 15px;
-        }
-        
-        .table tbody tr {
-            transition: all 0.3s;
-        }
-        
-        .table tbody tr:hover {
-            background-color: rgba(78, 115, 223, 0.05);
-        }
-        
-        .table tbody td {
-            padding: 12px 15px;
-            vertical-align: middle;
-        }
-        
+
+
         .status-hadir {
             color: var(--success-color);
-            font-weight: bold;
+            font-weight: 700;
         }
-        
+
         .status-tidak-hadir {
             color: var(--danger-color);
-            font-weight: bold;
+            font-weight: 700;
         }
-        
+
         .img-thumbnail {
             max-width: 60px;
             border-radius: 5px;
             transition: all 0.3s;
         }
-        
+
         .img-thumbnail:hover {
             transform: scale(1.5);
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
         }
-        
+
         .no-data {
             text-align: center;
             padding: 30px;
             color: #6c757d;
         }
-        
+
         .no-data i {
             font-size: 3rem;
             margin-bottom: 15px;
             color: #d1d3e2;
         }
-        
+
         .no-data p {
             font-size: 1.1rem;
         }
@@ -166,11 +171,19 @@
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/karyawan_dashboard">
                 <div class="sidebar-brand-text">KARYAWAN DASHBOARD</div>
             </a>
-            <hr class="sidebar-divider">
-            <li class="nav-item"><a class="nav-link" href="/karyawan_dashboard"><i class="fas fa-home"></i> Dashboard</a></li>
-            <li class="nav-item active"><a class="nav-link" href="/rekap_absensi"><i class="fas fa-calendar"></i> Rekap Absensi</a></li>
-            <li class="nav-item"><a class="nav-link" href="/gaji_saya"><i class="fas fa-money-bill-wave"></i> Gaji Saya</a></li>
-            <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            <hr class="sidebar-divider" />
+            <li class="nav-item">
+                <a class="nav-link" href="/karyawan_dashboard"><i class="fas fa-home"></i> Dashboard</a>
+            </li>
+            <li class="nav-item active">
+                <a class="nav-link" href="/rekap_absensi"><i class="fas fa-calendar"></i> Rekap Absensi</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/gaji_saya"><i class="fas fa-money-bill-wave"></i> Gaji Saya</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </li>
         </ul>
         <!-- End Sidebar -->
 
@@ -188,7 +201,7 @@
                         <li class="nav-item dropdown no-arrow">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown">
                                 <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ karyawan.name }}</span>
-                                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg">
+                                <img class="img-profile rounded-circle" src="/static/img/undraw_profile.svg" />
                             </a>
                         </li>
                     </ul>
@@ -211,129 +224,102 @@
                         </div>
                     </div>
 
-                    <!-- Attendance Table -->
+                    <!-- Filter Month -->
                     <div class="table-container">
-                        
-                        {% if attendance_list %}
-                        <div class="table-responsive">
-                            <table class="table table-hover" id="dataTable">
-                                <thead>
-                                    <tr>
-                                        <th>ID Jadwal</th>
-                                        <th>Tanggal</th>
-                                        <th>Jam Masuk</th>
-                                        <th>Jam Pulang</th>
-                                        <th>Status</th>
-                                        <th>Bukti</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for a in attendance_list %}
-                                    <tr>
-                                        <td>{{ a.id_jadwal }}</td>
-                                        <td>{{ a.tanggal if a.tanggal else a.timestamp.split(' - ')[0] if a.timestamp else '-' }}</td>
-                                        <td>{{ a.jam_masuk }}</td>
-                                        <td>{{ a.jam_pulang }}</td>
-                                        <td>
-                                            {% if a.status == 'Hadir' %}
-                                            <span class="status-hadir">{{ a.status }}</span>
-                                            {% else %}
-                                            <span class="status-tidak-hadir">{{ a.status }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if a.image_url %}
-                                            <a href="#" data-bs-toggle="modal" data-bs-target="#imageModal" 
-                                               data-image="{{ a.image_url }}"  
-                                               data-date="{{ a.timestamp }}">
-                                                <img src="{{ a.image_url }}" class="img-thumbnail">
-                                            </a>
-                                            {% else %}-{% endif %}
-                                        </td>
-                                    </tr>
+                        <form id="filterForm" method="get" action="{{ url_for('rekap_absensi') }}">
+                            <div class="filter-container">
+                                <label for="filterMonth" class="mr-2">Filter Bulan:</label>
+                                <select id="filterMonth" name="month">
+                                    <option value="">-- Semua Bulan --</option>
+                                    <option value="01" {% if request.args.get('month') == '01' %}selected{% endif %}>Januari</option>
+                                    <option value="02" {% if request.args.get('month') == '02' %}selected{% endif %}>Februari</option>
+                                    <option value="03" {% if request.args.get('month') == '03' %}selected{% endif %}>Maret</option>
+                                    <option value="04" {% if request.args.get('month') == '04' %}selected{% endif %}>April</option>
+                                    <option value="05" {% if request.args.get('month') == '05' %}selected{% endif %}>Mei</option>
+                                    <option value="06" {% if request.args.get('month') == '06' %}selected{% endif %}>Juni</option>
+                                    <option value="07" {% if request.args.get('month') == '07' %}selected{% endif %}>Juli</option>
+                                    <option value="08" {% if request.args.get('month') == '08' %}selected{% endif %}>Agustus</option>
+                                    <option value="09" {% if request.args.get('month') == '09' %}selected{% endif %}>September</option>
+                                    <option value="10" {% if request.args.get('month') == '10' %}selected{% endif %}>Oktober</option>
+                                    <option value="11" {% if request.args.get('month') == '11' %}selected{% endif %}>November</option>
+                                    <option value="12" {% if request.args.get('month') == '12' %}selected{% endif %}>Desember</option>
+                                </select>
+                                <button type="submit" id="btnFilter">Terapkan</button>
+                            </div>
+                        </form>
+
+                        <!-- Table Rekap Absensi -->
+                        {% if absensi_list %}
+<table class="table table-bordered table-hover" width="100%">
+    <thead>
+        <tr>
+            <th>No</th>
+            <th>ID Jadwal</th>
+            <th>Tanggal</th>
+            <th>Jam Masuk</th>
+            <th>Jam Pulang</th>
+            <th>Status</th>
+            <th>Bukti</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for absensi in absensi_list %}
+        <tr>
+             <td>{{ loop.index0 + start_index + 1 }}</td>
+            <td>{{ absensi.id_jadwal }}</td>
+            <td>{{ absensi.tanggal }}</td>
+            <td>{{ absensi.jam_masuk }}</td>
+            <td>{{ absensi.jam_pulang }}</td>
+            <td class="{{ 'status-hadir' if absensi.status == 'Hadir' else 'status-tidak-hadir' }}">
+                {{ absensi.status }}
+            </td>
+            <td><img src="{{ absensi.image_url }}" alt="Foto Absensi" class="img-thumbnail" /></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+                            </div>
+                                                                            <!-- Pagination -->
+                            <nav aria-label="Page navigation example">
+                                <ul class="pagination justify-content-center mt-3">
+                                    <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                                        <a class="page-link" href="{{ url_for('rekap_absensi', page=page-1) }}" tabindex="-1">Previous</a>
+                                    </li>
+                                    {% for p in range(1, total_pages + 1) %}
+                                    <li class="page-item {% if page == p %}active{% endif %}"><a class="page-link" href="{{ url_for('rekap_absensi', page=p) }}">{{ p }}</a></li>
                                     {% endfor %}
-                                </tbody>
-                            </table>
+                                    <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                                        <a class="page-link" href="{{ url_for('rekap_absensi', page=page+1) }}">Next</a>
+                                    </li>
+                                </ul>
+                            </nav>
+
+                            {% else %}
+                            <div class="no-data">
+                                <i class="fas fa-calendar-times"></i>
+                                <p>Data absensi tidak ditemukan.</p>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% else %}
-                        <div class="no-data">
-                            <i class="fas fa-calendar-times"></i>
-                            <p>Belum ada data absensi yang tercatat.</p>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
                 <!-- /.container-fluid -->
             </div>
             <!-- End of Main Content -->
+
         </div>
         <!-- End of Content Wrapper -->
     </div>
     <!-- End of Page Wrapper -->
 
-    <!-- Image Modal -->
-        <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title" id="imageModalLabel">Bukti Kehadiran</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <img id="modalImage" src="" class="img-fluid rounded" style="max-height: 70vh;">
-                    <div class="mt-3">
-                        <p><strong>Nama:</strong> <span id="modalName">{{ karyawan.name }}</span></p>
-                        <p><strong>Waktu:</strong> <span id="modalDate"></span></p>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <a id="downloadBtn" href="#" class="btn btn-primary" download>
-                        <i class="fas fa-download me-2"></i>Unduh
-                    </a>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-2"></i>Tutup
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-    <!-- Scripts -->
+    <!-- Bootstrap core JavaScript-->
     <script src="/static/vendor/jquery/jquery.min.js"></script>
     <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <!-- Core plugin JavaScript-->
     <script src="/static/vendor/jquery-easing/jquery.easing.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <!-- Custom scripts for all pages-->
     <script src="/static/js/sb-admin-2.min.js"></script>
-
-    <script>
-        $(document).ready(function () {
-        // Inisialisasi DataTable
-        $('#dataTable').DataTable({
-            "order": [[1, "desc"]],
-            "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.11.5/i18n/Indonesian.json"
-            },
-            "responsive": true,
-            "columnDefs": [
-                { "responsivePriority": 1, "targets": 0 },
-                { "responsivePriority": 2, "targets": 4 },
-                { "responsivePriority": 3, "targets": 5 }
-            ]
-        });
-
-        // Handler untuk modal gambar
-        $('#imageModal').on('show.bs.modal', function (event) {
-            var button = $(event.relatedTarget);
-            var modal = $(this);
-            
-            // Set data ke modal
-            modal.find('#modalImage').attr('src', button.data('image'));
-            modal.find('#modalDate').text(button.data('date') || '-');
-            modal.find('#downloadBtn').attr('href', button.data('image'));
-        });
-    });
-</script>
 </body>
+
 </html>

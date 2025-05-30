@@ -35,14 +35,7 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 dataset_path = 'DataSet'
-
-cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
-
-initialize_app(cred, {
-    'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
-    'storageBucket': 'facerecognition-c8264.appspot.com'  # Menambahkan storageBucket
-})
-
+from firebase_admin import credentials, initialize_app, storage
 
 
 # Load model hasil fine-tuning
@@ -379,7 +372,7 @@ def gen(user_id, jadwal_id, jam_masuk, jam_pulang):
 
                 print(f"[INFO] Expected: {user_id} | Detected: {detected_user_id} | Confidence: {confidence:.2f}")
 
-                if detected_user_id == user_id and confidence >= 0.50 and not attendance_logged:
+                if detected_user_id == user_id and confidence >= 0.75 and not attendance_logged:
                     timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
                     filename = f"att_{user_id}_{jadwal_id}_{timestamp}.jpg"
                     filepath = os.path.join(capture_dir, filename)
@@ -700,167 +693,6 @@ upload_dataset_to_firebase()
 
 
 
-# @app.route('/attendance', methods=['GET', 'POST'])
-# def admin_attendance():
-#     """
-#     Admin melihat laporan absensi berdasarkan golongan dan mata kuliah.
-#     """
-#     if 'user' not in session:
-#         return redirect('/login_admin')
-
-#     golongan = None
-#     mata_kuliah = None
-#     attendance_list = []
-
-#     # Ambil data jadwal terlebih dahulu
-#     jadwal_ref = db.reference('jadwal_mata_kuliah')
-#     jadwal_data = jadwal_ref.get() or {}
-
-#     # Pastikan jadwal_data terisi, jika kosong atau None, tangani dengan cara yang sesuai
-#     if not jadwal_data:
-#         jadwal_data = {}
-
-#     # Jika form disubmit, ambil golongan dan mata kuliah dari form
-#     if request.method == 'POST':
-#         golongan = request.form.get('golongan')
-#         mata_kuliah = request.form.get('mata_kuliah')
-
-#         print(f"Golongan yang dipilih: {golongan}")  # Debugging output golongan
-#         print(f"Mata Kuliah yang dipilih: {mata_kuliah}")  # Debugging output mata kuliah
-
-
-#         # Ambil data jadwal untuk golongan dan mata kuliah yang dipilih
-#         golongan_mahasiswa = jadwal_data.get(golongan, {}).get(mata_kuliah, [])
-
-#         # Ambil data mahasiswa dari koleksi students
-#         students_ref = db.reference('students')
-#         students_data = students_ref.get() or {}
-
-#         # Pastikan students_data adalah dictionary, bukan string
-#         if isinstance(students_data, str):
-#             students_data = {}
-
-#         # Ambil daftar mahasiswa berdasarkan golongan yang dipilih
-#         golongan_students = [student for student in students_data.values() if student['golongan'] == golongan]
-
-#         # Proses data absensi sesuai golongan dan mata kuliah yang dipilih
-#         for mata_kuliah_db, minggu_data in attendance_data.items():
-#             if mata_kuliah_db != mata_kuliah:
-#                 continue
-#             for minggu_ke, student_data in minggu_data.items():
-#                 for student_id, records in student_data.items():
-#                     for record_id, detail in records.items():
-#                         if isinstance(detail, dict) and detail.get("golongan") == golongan:
-#                             full_name = detail.get("name", "Tidak Ada")
-#                             name_only = full_name.split('-')[-1].strip() if full_name else "Tidak Ada"
-                            
-#                             # Gunakan regex untuk memastikan minggu_ke hanya berisi angka
-#                             minggu_number = re.sub(r'\D', '', minggu_ke)  # Hapus semua karakter non-digit
-
-#                             # Tambahkan data absensi mahasiswa yang hadir
-#                             attendance_list.append({
-#                                 "kode_mata_kuliah": detail.get("kode_mata_kuliah", "Tidak Ada"),
-#                                 "nama_mata_kuliah": detail.get("nama_mata_kuliah", "Tidak Ada"),
-#                                 "minggu_ke": int(minggu_number),  # Menggunakan minggu_ke sebagai integer
-#                                 "nim": detail.get("nim", "Tidak Ada"),
-#                                 "nama": name_only,
-#                                 "status": detail.get("status", "Hadir"),
-#                                 "timestamp": detail.get("timestamp", "Tidak Ada"),
-#                                 "image_url": detail.get("image_url", None)
-#                             })
-
-#         # Menambahkan mahasiswa yang tidak hadir berdasarkan golongan
-#         for mahasiswa in golongan_students:
-#             found = False
-#             for attendance in attendance_list:
-#                 if attendance['nim'] == mahasiswa['nim']:  # Cek berdasarkan NIM
-#                     found = True
-#                     break
-
-#             # Jika mahasiswa tidak ada dalam data absensi, tambahkan sebagai tidak hadir
-#             if not found:
-#                 # Tentukan minggu yang sesuai, gunakan minggu yang ada di data absensi
-#                 for mata_kuliah_db, minggu_data in attendance_data.items():
-#                     if mata_kuliah_db == mata_kuliah:
-#                         for minggu_ke, student_data in minggu_data.items():
-#                             # Gunakan minggu_ke dari data yang ada
-#                             minggu_number = re.sub(r'\D', '', minggu_ke)  # Hapus semua karakter non-digit
-
-#                             attendance_list.append({
-#                                 "kode_mata_kuliah": mata_kuliah,
-#                                 "nama_mata_kuliah": mata_kuliah,
-#                                 "minggu_ke": int(minggu_number),  # Gunakan minggu_ke sebagai integer
-#                                 "nim": mahasiswa['nim'],
-#                                 "nama": mahasiswa['name'],
-#                                 "status": "Tidak Hadir",
-#                                 "timestamp": "Tidak Ada",
-#                                 "image_url": None
-#                             })
-
-#         # Urutkan data berdasarkan minggu_ke dan nama mahasiswa
-#         attendance_list = sorted(attendance_list, key=lambda x: (x['minggu_ke'], x['nama']))
-
-#     # Ambil daftar golongan dari jadwal_data setelah memastikan data ada
-#     golongan_list = list(jadwal_data.keys())  # Ambil daftar golongan (A, B, C)
-
-#     # Ambil mata kuliah berdasarkan golongan yang dipilih
-#     mata_kuliah_list = []
-#     if golongan:
-#         mata_kuliah_list = list(jadwal_data.get(golongan, {}).keys())
-
-#     return render_template('attendance.html', 
-#                            attendance_list=attendance_list,
-#                            golongan_list=golongan_list,
-#                            mata_kuliah_list=mata_kuliah_list,
-#                            golongan=golongan, mata_kuliah=mata_kuliah)
-
-
-# @app.route('/update_attendance', methods=['POST'])
-# def update_attendance():
-#     """
-#     Admin memperbarui status absensi mahasiswa.
-#     """
-#     if 'user' not in session:
-#         return redirect('/login_admin')
-
-#     # Pastikan data yang diterima adalah JSON
-#     data = request.get_json()
-#     if not data:
-#         return jsonify({'status': 'error', 'message': 'Invalid JSON data'}), 400
-    
-#     # Debugging data yang diterima
-#     print(f"Data yang diterima: {data}")
-
-#     nim = data.get('nim')
-#     minggu_ke = data.get('minggu_ke')
-#     status = data.get('status')
-
-#     # Pastikan semua data yang diperlukan ada
-#     if not nim or not minggu_ke or not status:
-#         return jsonify({'status': 'error', 'message': 'NIM, Minggu Ke, dan Status harus ada.'}), 400
-
-#     # Update status absensi di Firebase
-#     attendance_ref = db.reference('attendance')
-#     attendance_data = attendance_ref.get()
-
-#     # Pastikan data absensi ada
-#     if not attendance_data:
-#         return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan.'}), 404
-
-#     # Cari entri yang sesuai dan update status
-#     for mata_kuliah, minggu_data in attendance_data.items():
-#         for minggu, student_data in minggu_data.items():
-#             for student_id, records in student_data.items():
-#                 if student_id == nim:  # Cari berdasarkan NIM
-#                     for record_id, record_detail in records.items():
-#                         if minggu == minggu_ke:  # Cari berdasarkan minggu
-#                             record_detail['status'] = status  # Update status
-#                             # Simpan perubahan ke Firebase
-#                             attendance_ref.child(mata_kuliah).child(minggu).child(student_id).child(record_id).update(record_detail)
-#                             return jsonify({'status': 'success', 'message': 'Absensi berhasil diperbarui.'})
-
-#     return jsonify({'status': 'error', 'message': 'Data absensi tidak ditemukan untuk NIM dan minggu yang diberikan.'}), 404
-#KARYAWAN ATTENDANCE
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
     snapshot = db.reference('attendance_karyawan').get()
@@ -1024,7 +856,7 @@ def admin_penggajian():
                     continue
                 if tanggal_selesai_obj and timestamp.date() > tanggal_selesai_obj.date():
                     continue
-                
+
                 tanggal_key = timestamp.date()
                 grouped_attendance[(karyawan_id, nama, tanggal_key)].append({
                     'timestamp': timestamp,
@@ -1071,6 +903,8 @@ def admin_penggajian():
             "status_gaji": status_gaji,
             "jumlah_presensi": jumlah_presensi  # Untuk debugging
         })
+
+
 
     attendance_list = sorted(attendance_list, key=lambda x: (str(x['minggu_ke']), x['nama']))
 
@@ -1316,21 +1150,6 @@ def edit_employee(employee_id):
         print(f"Error saat memperbarui data karyawan: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-# @app.route('/students/delete/<student_id>', methods=['DELETE'])
-# def delete_student(student_id):
-#     """
-#     Endpoint untuk menghapus data mahasiswa berdasarkan student_id.
-#     """
-#     try:
-#         student_ref = db.reference(f'students/{student_id}')
-        
-#         # Hapus data mahasiswa dari Firebase
-#         student_ref.delete()
-
-#         return jsonify({'status': 'success', 'message': f'Data mahasiswa dengan ID {student_id} berhasil dihapus.'})
-#     except Exception as e:
-#         print(f"Error saat menghapus data mahasiswa: {str(e)}")
-#         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/employees/delete/<employee_id>', methods=['DELETE'])
 def delete_employee(employee_id):
@@ -1345,70 +1164,6 @@ def delete_employee(employee_id):
         print(f"Error saat menghapus data: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-
-# # Route untuk mengambil data mahasiswa
-# @app.route('/students', methods=['GET'])
-# def get_students():
-#     try:
-#         combined_data = []
-
-#         # Ambil data mahasiswa
-#         students_ref = db.reference('students')
-#         students_data = students_ref.get()
-#         if students_data:
-#             for student_id, student_info in students_data.items():
-#                 folder_path = os.path.join(dataset_path, student_id)
-#                 if os.path.exists(folder_path):
-#                     images_count = len([
-#                         f for f in os.listdir(folder_path)
-#                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))
-#                     ])
-#                     if 'images_count' not in student_info or student_info['images_count'] == 0:
-#                         student_ref = db.reference(f'students/{student_id}')
-#                         student_ref.update({'images_count': images_count})
-
-#                 combined_data.append({
-#                     'id': student_id,
-#                     'name': student_info.get('name', 'Unknown'),
-#                     'golongan': student_info.get('golongan', 'Unknown'),
-#                     'semester': student_info.get('semester', ''),
-#                     'jabatan': '-',  # kosongkan karena mahasiswa
-#                     'images_count': student_info.get('images_count', 0),
-#                     'edit_url': f'/students/edit/{student_id}',
-#                     'delete_url': f'/students/delete/{student_id}'
-#                 })
-
-#         # Ambil data karyawan
-#         employees_ref = db.reference('employees')
-#         employees_data = employees_ref.get()
-#         if employees_data:
-#             for emp_id, emp_info in employees_data.items():
-#                 folder_path = os.path.join(dataset_path, emp_id)
-#                 if os.path.exists(folder_path):
-#                     images_count = len([
-#                         f for f in os.listdir(folder_path)
-#                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))
-#                     ])
-#                     if 'images_count' not in emp_info or emp_info['images_count'] == 0:
-#                         emp_ref = db.reference(f'employees/{emp_id}')
-#                         emp_ref.update({'images_count': images_count})
-
-#                 combined_data.append({
-#                     'id': emp_id,
-#                     'name': emp_info.get('name', 'Unknown'),
-#                     'golongan': '-',  # kosongkan karena karyawan
-#                     'semester': '-',  # kosongkan karena karyawan
-#                     'jabatan': emp_info.get('jabatan', 'Unknown'),
-#                     'images_count': emp_info.get('images_count', 0),
-#                     'edit_url': f'/students/edit/{emp_id}',  # kamu bisa sesuaikan endpoint edit-nya
-#                     'delete_url': f'/students/delete/{emp_id}'  # kamu bisa sesuaikan juga
-#                 })
-
-#         return jsonify({'status': 'success', 'data': combined_data})
-
-#     except Exception as e:
-#         print(f"Error saat mengambil data: {str(e)}")
-#         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/employees', methods=['GET'])
 def get_employees():
@@ -1558,103 +1313,104 @@ def set_absensi():
     return render_template('set_absensi.html', message=None)
     
 
-@app.route('/rekap_absensi', methods=['GET', 'POST'])
+@app.route('/rekap_absensi', methods=['GET'])
 def rekap_absensi():
     if 'karyawan' not in session:
         return redirect('/login_karyawan')
 
     karyawan = session['karyawan']
     id_karyawan = karyawan['id']
-    jabatan = karyawan['jabatan']
 
-    # Debug: Print informasi karyawan
-    print(f"[DEBUG] Karyawan ID: {id_karyawan}, Jabatan: {jabatan}")
-
-    # Dapatkan semua data attendance
     attendance_ref = db.reference("attendance_karyawan")
     semua_absensi = attendance_ref.get() or {}
 
-    # Debug: Print struktur data dari Firebase
-    print(f"[DEBUG] Struktur data Firebase: {semua_absensi}")
+    semua_tanggal_hadir = set()
+    data_hadir_detail = {}
 
-    karyawan_attendance = []
+    for id_jadwal, karyawan_data in semua_absensi.items():
+        record_karyawan = karyawan_data.get(id_karyawan, {})
+        for record_id, detail in record_karyawan.items():
+            raw_ts = detail.get('timestamp', '')
+            try:
+                tanggal = datetime.strptime(raw_ts, "%Y-%m-%dT%H-%M-%S").date()
+                semua_tanggal_hadir.add(tanggal)
+                if tanggal not in data_hadir_detail:
+                    data_hadir_detail[tanggal] = []
+                data_hadir_detail[tanggal].append(detail)
+            except ValueError:
+                continue
 
-    # Iterasi melalui semua data attendance
-    for id_jadwal, jadwal_data in semua_absensi.items():
-        if not jadwal_data:
+    bulan_filter = request.args.get('month')
+    today = datetime.today().date()
+    awal_bulan = today.replace(day=1)
+    tanggal_semua = [(awal_bulan + timedelta(days=i)) for i in range((today - awal_bulan).days + 1)]
+
+    hasil_rekap = []
+    for tanggal in tanggal_semua:
+        if bulan_filter and tanggal.strftime('%m') != bulan_filter:
             continue
 
-        # Cek apakah data berupa dictionary (format baru) atau list (format lama)
-        if isinstance(jadwal_data, dict):
-            for id_karyawan_db, karyawan_data in jadwal_data.items():
-                if id_karyawan_db == id_karyawan:
-                    presensi_records = []
-                    
-                    for record_id, detail in karyawan_data.items():
-                        if isinstance(detail, dict):
-                            try:
-                                # Handle berbagai format timestamp
-                                timestamp_str = detail.get('timestamp', '')
-                                if 'T' in timestamp_str:
-                                    dt_object = datetime.strptime(timestamp_str, "%Y-%m-%dT%H-%M-%S")
-                                else:
-                                    # Coba format lain jika perlu
-                                    dt_object = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                                
-                                presensi_records.append({
-                                    'datetime': dt_object,
-                                    'jam_masuk': detail.get('jam_masuk', ''),
-                                    'jam_pulang': detail.get('jam_pulang', ''),
-                                    'image_url': detail.get('image_url', ''),
-                                    'name': detail.get('name', '')
-                                })
-                            except Exception as e:
-                                print(f"[ERROR] Gagal parsing timestamp: {timestamp_str}, Error: {str(e)}")
-                                continue
+        id_jadwal_terkait = None
+        if tanggal in semua_tanggal_hadir:
+            for id_jadwal, karyawan_data in semua_absensi.items():
+                record_karyawan = karyawan_data.get(id_karyawan, {})
+                for record_id, detail in record_karyawan.items():
+                    raw_ts = detail.get('timestamp', '')
+                    try:
+                        tgl = datetime.strptime(raw_ts, "%Y-%m-%dT%H-%M-%S").date()
+                        if tgl == tanggal:
+                            id_jadwal_terkait = id_jadwal
+                            break
+                    except ValueError:
+                        continue
+                if id_jadwal_terkait:
+                    break
 
-                    # Kelompokkan berdasarkan tanggal
-                    presensi_per_tanggal = {}
-                    for presensi in presensi_records:
-                        tanggal = presensi['datetime'].strftime('%Y-%m-%d')
-                        if tanggal not in presensi_per_tanggal:
-                            presensi_per_tanggal[tanggal] = []
-                        presensi_per_tanggal[tanggal].append(presensi)
+            records = data_hadir_detail[tanggal]
+            records.sort(key=lambda x: x['timestamp'])
+            jam_masuk = records[0].get('jam_masuk', '-')
+            jam_pulang = records[-1].get('jam_pulang', '-')
+            image_url = records[0].get('image_url', '')
+            status = 'Hadir'
+            timestamp_info = f"{records[0]['timestamp']} - {records[-1]['timestamp']}"
+        else:
+            jam_masuk = '-'
+            jam_pulang = '-'
+            image_url = ''
+            status = 'Tidak Hadir'
+            timestamp_info = ''
+            id_jadwal_terkait = '-'
 
-                    # Proses setiap tanggal
-                    for tanggal, presensi_list in presensi_per_tanggal.items():
-                        presensi_list.sort(key=lambda x: x['datetime'])
-                        
-                        if len(presensi_list) >= 2:
-                            status = 'Hadir'
-                            jam_masuk = presensi_list[0]['jam_masuk'] or '-'
-                            jam_pulang = presensi_list[-1]['jam_pulang'] or '-'
-                            image_url = presensi_list[0]['image_url'] or presensi_list[-1]['image_url']
-                            timestamp = f"{presensi_list[0]['datetime'].strftime('%d %B %Y %H:%M:%S')} - {presensi_list[-1]['datetime'].strftime('%H:%M:%S')}"
-                        else:
-                            status = 'Tidak Hadir'
-                            jam_masuk = presensi_list[0]['jam_masuk'] if presensi_list else '-'
-                            jam_pulang = '-'
-                            image_url = presensi_list[0]['image_url'] if presensi_list else ''
-                            timestamp = presensi_list[0]['datetime'].strftime('%d %B %Y %H:%M:%S') if presensi_list else ''
+        hasil_rekap.append({
+            'id_jadwal': id_jadwal_terkait,
+            'tanggal': tanggal.strftime('%Y-%m-%d'),
+            'jam_masuk': jam_masuk,
+            'jam_pulang': jam_pulang,
+            'status': status,
+            'timestamp': timestamp_info,
+            'image_url': image_url
+        })
 
-                        karyawan_attendance.append({
-                            'tanggal': tanggal,
-                            'id_jadwal': id_jadwal,
-                            'jam_masuk': jam_masuk,
-                            'jam_pulang': jam_pulang,
-                            'status': status,
-                            'timestamp': timestamp,
-                            'image_url': image_url
-                        })
+    hasil_rekap.sort(key=lambda x: x['tanggal'])
 
-    # Debug: Print data yang akan ditampilkan
-    print(f"[DEBUG] Data yang akan ditampilkan: {karyawan_attendance}")
+    # Pagination setup
+    page = request.args.get('page', default=1, type=int)
+    per_page = 7
+    total = len(hasil_rekap)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_absensi = hasil_rekap[start:end]
+    total_pages = (total + per_page - 1) // per_page
 
     return render_template(
-        'rekap_absensi.html',
+        "rekap_absensi.html",
+        absensi_list=paginated_absensi,
         karyawan=karyawan,
-        attendance_list=karyawan_attendance
+        page=page,
+        total_pages=total_pages,
+        start_index=start  # dikirim ke template agar nomor urut lanjut terus
     )
+
 
 @app.route('/gaji_saya')
 def gaji_saya():
