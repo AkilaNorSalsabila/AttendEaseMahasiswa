@@ -36,7 +36,7 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 dataset_path = 'DataSet'
 
-cred = credentials.Certificate("D:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
 
 initialize_app(cred, {
     'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
@@ -1024,33 +1024,29 @@ def admin_penggajian():
                     continue
                 if tanggal_selesai_obj and timestamp.date() > tanggal_selesai_obj.date():
                     continue
-
-                grouped_attendance[(jadwal_id, nama)].append({
+                
+                tanggal_key = timestamp.date()
+                grouped_attendance[(karyawan_id, nama, tanggal_key)].append({
                     'timestamp': timestamp,
                     'status': detail.get('status', 'Hadir'),
-                    'karyawan_id': karyawan_id
+                    'karyawan_id': karyawan_id  # Tambahkan ini untuk referensi
                 })
 
-    for (jadwal_id, nama), records in grouped_attendance.items():
+    for (karyawan_id, nama, tanggal_key), records in grouped_attendance.items():
         records.sort(key=lambda r: r['timestamp'])
         jumlah_presensi = len(records)
-        masuk = records[0]['timestamp'] if jumlah_presensi >= 1 else None
-        pulang = records[-1]['timestamp'] if jumlah_presensi >= 2 else None
-        minggu_ke = masuk.isocalendar()[1] if masuk else '-'
-
-        # Logika status dan gaji
+        
+        # Logika status hadir (minimal 2 presensi)
         status = 'Hadir' if jumlah_presensi >= 2 else 'Tidak Hadir'
         gaji = gaji_default if status == 'Hadir' else 0
-
-        if masuk:
-            tanggal_ditampilkan = masuk.strftime('%d %B %Y')
-        elif pulang:
-            tanggal_ditampilkan = pulang.strftime('%d %B %Y')
-        else:
-            tanggal_ditampilkan = '-'
+        
+        minggu_ke = records[0]['timestamp'].isocalendar()[1] if records else '-'
+        tanggal_ditampilkan = tanggal_key.strftime('%d %B %Y') if records else '-'
+        
         status_gaji = 'belum diambil'
 
-        penggajian_ref = db.reference(f"penggajian/{records[0]['karyawan_id']}")
+        # Cek status penggajian di Firebase
+        penggajian_ref = db.reference(f"penggajian/{karyawan_id}")
         penggajian_data = penggajian_ref.get()
 
         if penggajian_data:
@@ -1064,18 +1060,17 @@ def admin_penggajian():
                             break
                 if status_gaji == 'sudah diambil':
                     break
+
         attendance_list.append({
-            "id_karyawan": records[0]['karyawan_id'],
+            "id_karyawan": karyawan_id,
             "nama": nama,
             "status": status,
             "tanggal": tanggal_ditampilkan,
             "minggu_ke": minggu_ke,
             "gaji": gaji,
-            "status_gaji": status_gaji
+            "status_gaji": status_gaji,
+            "jumlah_presensi": jumlah_presensi  # Untuk debugging
         })
-
-
-
 
     attendance_list = sorted(attendance_list, key=lambda x: (str(x['minggu_ke']), x['nama']))
 
@@ -1572,100 +1567,88 @@ def rekap_absensi():
     id_karyawan = karyawan['id']
     jabatan = karyawan['jabatan']
 
-    jadwal_ref = db.reference(f"jadwal_kerja/{jabatan}")
-    semua_jadwal = jadwal_ref.get() or {}
+    # Debug: Print informasi karyawan
+    print(f"[DEBUG] Karyawan ID: {id_karyawan}, Jabatan: {jabatan}")
 
+    # Dapatkan semua data attendance
     attendance_ref = db.reference("attendance_karyawan")
     semua_absensi = attendance_ref.get() or {}
 
+    # Debug: Print struktur data dari Firebase
+    print(f"[DEBUG] Struktur data Firebase: {semua_absensi}")
+
     karyawan_attendance = []
 
-    for id_jadwal, jadwal_info in semua_jadwal.items():
-        jadwal_masuk = jadwal_info.get('jam_masuk', '')
-        jadwal_pulang = jadwal_info.get('jam_pulang', '')
+    # Iterasi melalui semua data attendance
+    for id_jadwal, jadwal_data in semua_absensi.items():
+        if not jadwal_data:
+            continue
 
-        absensi_jadwal = semua_absensi.get(id_jadwal, {}).get(id_karyawan, {})
-
-        timestamps = []
-
-        for record in absensi_jadwal.values():
-            raw_timestamp = record.get('timestamp', '')
-            try:
-                dt_object = datetime.strptime(raw_timestamp, "%Y-%m-%dT%H-%M-%S")
-                timestamps.append((dt_object, record))
-            except ValueError:
-                continue  # lewati jika timestamp tidak valid
-
-        timestamps.sort()  # urutkan berdasarkan waktu
-
-        if len(timestamps) >= 2:
-            masuk_record = timestamps[0][1]
-            pulang_record = timestamps[-1][1]
-            status = 'Hadir'
-            timestamp_info = f"{timestamps[0][0].strftime('%d %B %Y %H:%M:%S')} - {timestamps[-1][0].strftime('%d %B %Y %H:%M:%S')}"
-            image_url = masuk_record.get('image_url', '') or pulang_record.get('image_url', '')
-        else:
-            status = 'Tidak Hadir'
-            timestamp_info = ''
-            image_url = ''
-
-        karyawan_attendance.append({
-            'id_jadwal': id_jadwal,
-            'jam_masuk': jadwal_masuk,
-            'jam_pulang': jadwal_pulang,
-            'status': status,
-            'timestamp': timestamp_info,
-            'image_url': image_url
-        })
-
-    karyawan_attendance.sort(key=lambda x: x['id_jadwal'])
-
-    return render_template("rekap_absensi.html", attendance_list=karyawan_attendance, karyawan=karyawan)
-    # Iterasi data absensi
-    for kode_mata_kuliah, minggu_data in attendance_data.items():
-        # Pastikan minggu_data adalah dictionary atau list
-        if isinstance(minggu_data, dict):
-            for minggu, student_data in minggu_data.items():
-                # Cek apakah student_data bukan None
-                if student_data and karyawan['id'] in student_data:
-                    # Masuk ke key acak
-                    for random_key, detail in student_data[karyawan['id']].items():
-                        # Cek apakah detail adalah dictionary sebelum memanggil .get()
+        # Cek apakah data berupa dictionary (format baru) atau list (format lama)
+        if isinstance(jadwal_data, dict):
+            for id_karyawan_db, karyawan_data in jadwal_data.items():
+                if id_karyawan_db == id_karyawan:
+                    presensi_records = []
+                    
+                    for record_id, detail in karyawan_data.items():
                         if isinstance(detail, dict):
-                            karyawan_attendance.append({
-                                "id_jadwal": detail.get("id_jadwal", "Unknown"),
-                                "jam_masuk": detail.get("jam_masuk", "Tidak ada"),
-                                "jam_pulang": detail.get("jam_pulang", "Tidak ada"),
-                                "timestamp": detail.get("timestamp", "Tidak ada"),
-                                "status": detail.get("status", "Tidak Hadir"),
-                                "image_url": detail.get("image_url", None)
-                            })
-                        else:
-                            # Jika detail bukan dictionary, tampilkan pesan debug
-                            print(f"[DEBUG] Detail for {random_key} is not a dictionary: {detail}")
+                            try:
+                                # Handle berbagai format timestamp
+                                timestamp_str = detail.get('timestamp', '')
+                                if 'T' in timestamp_str:
+                                    dt_object = datetime.strptime(timestamp_str, "%Y-%m-%dT%H-%M-%S")
+                                else:
+                                    # Coba format lain jika perlu
+                                    dt_object = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                                
+                                presensi_records.append({
+                                    'datetime': dt_object,
+                                    'jam_masuk': detail.get('jam_masuk', ''),
+                                    'jam_pulang': detail.get('jam_pulang', ''),
+                                    'image_url': detail.get('image_url', ''),
+                                    'name': detail.get('name', '')
+                                })
+                            except Exception as e:
+                                print(f"[ERROR] Gagal parsing timestamp: {timestamp_str}, Error: {str(e)}")
+                                continue
 
-        elif isinstance(minggu_data, list):
-            # Handle jika minggu_data adalah list
-            for index, karyawan_data in enumerate(minggu_data):
-                # Cek apakah karyawan_data bukan None
-                if karyawan_data and karyawan['id'] in karyawan_data:
-                    for random_key, detail in karyawan_data[karyawan['id']].items():
-                        if isinstance(detail, dict):
-                            karyawan_attendance.append({
-                                "id_jadwal": detail.get("id_jadwal", "Unknown"),
-                                "jam_masuk": detail.get("jam_masuk", "Tidak ada"),
-                                "jam_pulang": detail.get("jam_pulang", "Tidak ada"),
-                                "minggu": index,  # Menggunakan index minggu dari list
-                                "timestamp": detail.get("timestamp", "Tidak Ada Data"),
-                                "status": detail.get("status", "Tidak Hadir"),
-                                "image_url": detail.get("image_url", None)
-                            })
-                        else:
-                            # Jika detail bukan dictionary, tampilkan pesan debug
-                            print(f"[DEBUG] Detail for {random_key} is not a dictionary: {detail}")
+                    # Kelompokkan berdasarkan tanggal
+                    presensi_per_tanggal = {}
+                    for presensi in presensi_records:
+                        tanggal = presensi['datetime'].strftime('%Y-%m-%d')
+                        if tanggal not in presensi_per_tanggal:
+                            presensi_per_tanggal[tanggal] = []
+                        presensi_per_tanggal[tanggal].append(presensi)
 
-    # Debug data absensi karyawan
-    print(f"[DEBUG] Karyawan Attendance: {karyawan_attendance}")
+                    # Proses setiap tanggal
+                    for tanggal, presensi_list in presensi_per_tanggal.items():
+                        presensi_list.sort(key=lambda x: x['datetime'])
+                        
+                        if len(presensi_list) >= 2:
+                            status = 'Hadir'
+                            jam_masuk = presensi_list[0]['jam_masuk'] or '-'
+                            jam_pulang = presensi_list[-1]['jam_pulang'] or '-'
+                            image_url = presensi_list[0]['image_url'] or presensi_list[-1]['image_url']
+                            timestamp = f"{presensi_list[0]['datetime'].strftime('%d %B %Y %H:%M:%S')} - {presensi_list[-1]['datetime'].strftime('%H:%M:%S')}"
+                        else:
+                            status = 'Tidak Hadir'
+                            jam_masuk = presensi_list[0]['jam_masuk'] if presensi_list else '-'
+                            jam_pulang = '-'
+                            image_url = presensi_list[0]['image_url'] if presensi_list else ''
+                            timestamp = presensi_list[0]['datetime'].strftime('%d %B %Y %H:%M:%S') if presensi_list else ''
+
+                        karyawan_attendance.append({
+                            'tanggal': tanggal,
+                            'id_jadwal': id_jadwal,
+                            'jam_masuk': jam_masuk,
+                            'jam_pulang': jam_pulang,
+                            'status': status,
+                            'timestamp': timestamp,
+                            'image_url': image_url
+                        })
+
+    # Debug: Print data yang akan ditampilkan
+    print(f"[DEBUG] Data yang akan ditampilkan: {karyawan_attendance}")
 
     return render_template(
         'rekap_absensi.html',
