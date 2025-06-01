@@ -1313,6 +1313,11 @@ def set_absensi():
 
     return render_template('set_absensi.html', message=None)
     
+from flask import Flask, render_template, request, redirect, session
+from datetime import datetime, timedelta, date
+from calendar import monthrange
+
+
 
 @app.route('/rekap_absensi', methods=['GET'])
 def rekap_absensi():
@@ -1326,8 +1331,10 @@ def rekap_absensi():
     semua_absensi = attendance_ref.get() or {}
 
     semua_tanggal_hadir = set()
-    data_hadir_detail = {}
+    data_hadir_detail = defaultdict(list)
+    bulan_terdata = set()
 
+    # Kumpulkan data absensi per tanggal dan catat bulan-tahun yg ada data
     for id_jadwal, karyawan_data in semua_absensi.items():
         record_karyawan = karyawan_data.get(id_karyawan, {})
         for record_id, detail in record_karyawan.items():
@@ -1335,66 +1342,69 @@ def rekap_absensi():
             try:
                 tanggal = datetime.strptime(raw_ts, "%Y-%m-%dT%H-%M-%S").date()
                 semua_tanggal_hadir.add(tanggal)
-                if tanggal not in data_hadir_detail:
-                    data_hadir_detail[tanggal] = []
-                data_hadir_detail[tanggal].append(detail)
+                
+                # Tambahkan id_jadwal ke data detail
+                detail_with_id = detail.copy()
+                detail_with_id['id_jadwal'] = id_jadwal
+                
+                data_hadir_detail[tanggal].append(detail_with_id)
+                bulan_terdata.add((tanggal.year, tanggal.month))
             except ValueError:
                 continue
 
-    bulan_filter = request.args.get('month')
-    today = datetime.today().date()
-    awal_bulan = today.replace(day=1)
-    tanggal_semua = [(awal_bulan + timedelta(days=i)) for i in range((today - awal_bulan).days + 1)]
+    # Ambil filter bulan dari parameter GET
+    bulan_filter = request.args.get('month', type=int)
+    tahun_filter = datetime.today().year
+    if not bulan_filter:
+        bulan_filter = datetime.today().month
 
     hasil_rekap = []
-    for tanggal in tanggal_semua:
-        if bulan_filter and tanggal.strftime('%m') != bulan_filter:
-            continue
+    if (tahun_filter, bulan_filter) in bulan_terdata:
+        jumlah_hari = monthrange(tahun_filter, bulan_filter)[1]
+        today = datetime.today().date()
+        if tahun_filter == today.year and bulan_filter == today.month:
+            jumlah_hari = today.day
 
-        id_jadwal_terkait = None
-        if tanggal in semua_tanggal_hadir:
-            for id_jadwal, karyawan_data in semua_absensi.items():
-                record_karyawan = karyawan_data.get(id_karyawan, {})
-                for record_id, detail in record_karyawan.items():
-                    raw_ts = detail.get('timestamp', '')
-                    try:
-                        tgl = datetime.strptime(raw_ts, "%Y-%m-%dT%H-%M-%S").date()
-                        if tgl == tanggal:
-                            id_jadwal_terkait = id_jadwal
-                            break
-                    except ValueError:
-                        continue
-                if id_jadwal_terkait:
-                    break
+        tanggal_semua = [date(tahun_filter, bulan_filter, day) for day in range(1, jumlah_hari + 1)]
 
-            records = data_hadir_detail[tanggal]
-            records.sort(key=lambda x: x['timestamp'])
-            jam_masuk = records[0].get('jam_masuk', '-')
-            jam_pulang = records[-1].get('jam_pulang', '-')
-            image_url = records[0].get('image_url', '')
-            status = 'Hadir'
-            timestamp_info = f"{records[0]['timestamp']} - {records[-1]['timestamp']}"
-        else:
-            jam_masuk = '-'
-            jam_pulang = '-'
-            image_url = ''
-            status = 'Tidak Hadir'
-            timestamp_info = ''
-            id_jadwal_terkait = '-'
+        for tanggal in tanggal_semua:
+            if tanggal in semua_tanggal_hadir:
+                records = data_hadir_detail[tanggal]
+                records.sort(key=lambda x: x['timestamp'])
 
-        hasil_rekap.append({
-            'id_jadwal': id_jadwal_terkait,
-            'tanggal': tanggal.strftime('%Y-%m-%d'),
-            'jam_masuk': jam_masuk,
-            'jam_pulang': jam_pulang,
-            'status': status,
-            'timestamp': timestamp_info,
-            'image_url': image_url
-        })
+                if len(records) >= 2:
+                    status = 'Hadir'
+                    jam_masuk = records[0].get('jam_masuk', '-')
+                    jam_pulang = records[-1].get('jam_pulang', '-')
+                    image_url_masuk = records[0].get('image_url', '')
+                    image_url_pulang = records[-1].get('image_url', '')
+                    id_jadwal = records[0].get('id_jadwal', '-')
+                else:
+                    status = 'Tidak Hadir'
+                    jam_masuk = records[0].get('jam_masuk', '-') if records else '-'
+                    jam_pulang = '-'
+                    image_url_masuk = records[0].get('image_url', '') if records else ''
+                    image_url_pulang = ''
+                    id_jadwal = records[0].get('id_jadwal', '-') if records else '-'
+            else:
+                status = 'Tidak Hadir'
+                jam_masuk = '-'
+                jam_pulang = '-'
+                image_url_masuk = ''
+                image_url_pulang = ''
+                id_jadwal = '-'
 
-    hasil_rekap.sort(key=lambda x: x['tanggal'])
+            hasil_rekap.append({
+                'id_jadwal': id_jadwal,
+                'tanggal': tanggal.strftime('%Y-%m-%d'),
+                'jam_masuk': jam_masuk,
+                'jam_pulang': jam_pulang,
+                'status': status,
+                'image_url_masuk': image_url_masuk,
+                'image_url_pulang': image_url_pulang
+            })
 
-    # Pagination setup
+    # Pagination
     page = request.args.get('page', default=1, type=int)
     per_page = 7
     total = len(hasil_rekap)
@@ -1409,7 +1419,8 @@ def rekap_absensi():
         karyawan=karyawan,
         page=page,
         total_pages=total_pages,
-        start_index=start  # dikirim ke template agar nomor urut lanjut terus
+        start_index=start,
+        bulan_filter=bulan_filter
     )
 
 

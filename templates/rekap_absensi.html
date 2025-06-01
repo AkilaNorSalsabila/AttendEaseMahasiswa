@@ -250,50 +250,62 @@
 
                         <!-- Table Rekap Absensi -->
                         {% if absensi_list %}
-<table class="table table-bordered table-hover" width="100%">
-    <thead>
-        <tr>
-            <th>No</th>
-            <th>ID Jadwal</th>
-            <th>Tanggal</th>
-            <th>Jam Masuk</th>
-            <th>Jam Pulang</th>
-            <th>Status</th>
-            <th>Bukti</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for absensi in absensi_list %}
-        <tr>
-             <td>{{ loop.index0 + start_index + 1 }}</td>
-            <td>{{ absensi.id_jadwal }}</td>
-            <td>{{ absensi.tanggal }}</td>
-            <td>{{ absensi.jam_masuk }}</td>
-            <td>{{ absensi.jam_pulang }}</td>
-            <td class="{{ 'status-hadir' if absensi.status == 'Hadir' else 'status-tidak-hadir' }}">
-                {{ absensi.status }}
-            </td>
-            <td><img src="{{ absensi.image_url }}" alt="Foto Absensi" class="img-thumbnail" /></td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+                        <table class="table table-bordered table-hover" width="100%">
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>ID Jadwal</th>
+                                    <th>Tanggal</th>
+                                    <th>Jam Masuk</th>
+                                    <th>Jam Pulang</th>
+                                    <th>Status</th>
+                                    <th>Bukti</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for absensi in absensi_list %}
+                                <tr>
+                                    <td>{{ loop.index0 + start_index + 1 }}</td>
+                                    <td>{{ absensi.id_jadwal }}</td>
+                                    <td>{{ absensi.tanggal }}</td>
+                                    <td>{{ absensi.jam_masuk }}</td>
+                                    <td>{{ absensi.jam_pulang }}</td>
+                                    <td class="{{ 'status-hadir' if absensi.status == 'Hadir' else 'status-tidak-hadir' }}">
+                                        {{ absensi.status }}
+                                    </td>
+                                    <td>
+                            {% if absensi.image_url_masuk %}
+                                <img src="{{ absensi.image_url_masuk }}" alt="Foto Masuk" class="img-thumbnail" style="max-width: 80px;" />
+                            {% endif %}
+                            {% if absensi.image_url_pulang %}
+                                <img src="{{ absensi.image_url_pulang }}" alt="Foto Pulang" class="img-thumbnail" style="max-width: 80px;" />
+                            {% endif %}
+                        </td>
+
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
 
                             </div>
                                                                             <!-- Pagination -->
+                            <!-- Pagination -->
                             <nav aria-label="Page navigation example">
                                 <ul class="pagination justify-content-center mt-3">
                                     <li class="page-item {% if page == 1 %}disabled{% endif %}">
-                                        <a class="page-link" href="{{ url_for('rekap_absensi', page=page-1) }}" tabindex="-1">Previous</a>
+                                        <a class="page-link" href="{{ url_for('rekap_absensi', page=page-1, month=request.args.get('month')) }}" tabindex="-1">Previous</a>
                                     </li>
                                     {% for p in range(1, total_pages + 1) %}
-                                    <li class="page-item {% if page == p %}active{% endif %}"><a class="page-link" href="{{ url_for('rekap_absensi', page=p) }}">{{ p }}</a></li>
+                                    <li class="page-item {% if page == p %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('rekap_absensi', page=p, month=request.args.get('month')) }}">{{ p }}</a>
+                                    </li>
                                     {% endfor %}
                                     <li class="page-item {% if page == total_pages %}disabled{% endif %}">
-                                        <a class="page-link" href="{{ url_for('rekap_absensi', page=page+1) }}">Next</a>
+                                        <a class="page-link" href="{{ url_for('rekap_absensi', page=page+1, month=request.args.get('month')) }}">Next</a>
                                     </li>
                                 </ul>
                             </nav>
+
 
                             {% else %}
                             <div class="no-data">
