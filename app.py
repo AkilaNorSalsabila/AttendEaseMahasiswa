@@ -23,6 +23,10 @@ from datetime import datetime
 from flask import Flask, render_template, request
 import firebase_admin
 from firebase_admin import credentials, db
+import re  # Tambahkan baris ini
+from flask import Flask, render_template, request, redirect, session, jsonify
+# ... import lainnya yang sudah ada
+
 
 # Inisialisasi Firebase
 app = Flask(__name__)
@@ -32,7 +36,7 @@ app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # Maksimum 64 MB
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 dataset_path = 'DataSet'
 
-cred = credentials.Certificate("C:/tugas/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
+cred = credentials.Certificate("C:/coba/facerecognition-c8264-firebase-adminsdk-nodyk-90850d2e73.json")
 initialize_app(cred, {
     'databaseURL': 'https://facerecognition-c8264-default-rtdb.firebaseio.com/',
     'storageBucket': 'facerecognition-c8264.appspot.com'  # Menambahkan storageBucket
@@ -57,9 +61,9 @@ with open('label_map.json', 'r') as f:
     labels = json.load(f)
 
 # Path dataset
-dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataSet"
+dataset_path = "C:/Users/Anggi/OneDrive/Dokumen/GitHub/AttendEaseMahasiswa/DataSet"
 
-test_dataset_path = "D:/cobaf/AttendEaseMahasiswa/DataTest"
+test_dataset_path = "C:/Users/Anggi/OneDrive/Dokumen/GitHub/AttendEaseMahasiswa/DataTest"
 
 faceDeteksi = cv2.CascadeClassifier('haarcascade_frontalface_default.xml') 
 # Fungsi untuk mengunggah dataset manual ke Firebase
@@ -528,45 +532,6 @@ def get_last_id():
         app.logger.exception(e)
         return jsonify({'error': str(e)}), 500
 
-
-# Memanmbahkan Dataset
-# Path folder dataset Akila
-# folder_path = r"D:\cobaf\AttendEaseMahasiswa\DataSet\KRY-01-Akila"
-# folder_name = os.path.basename(folder_path)
-
-# # Ekstrak ID dan Nama
-# parts = folder_name.split('-')
-# id_karyawan = parts[1]  # "01"
-# employee_id = f"KRY-{id_karyawan}"  # "KRY-01"
-# name = parts[2]  # "Akila"
-# jabatan = "Staff"  # <-- Ubah jika perlu
-
-# # Hitung jumlah gambar
-# image_extensions = ['.jpg', '.jpeg', '.png']
-# image_files = [f for f in os.listdir(folder_path) if os.path.splitext(f)[1].lower() in image_extensions]
-# jumlah_gambar = len(image_files)
-
-# # Waktu saat ini
-# timestamp = datetime.now().isoformat()
-
-# # Data yang akan dikirim
-# data = {
-#     "id": employee_id,
-#     "id_karyawan": id_karyawan,
-#     "name": name,
-#     "jabatan": jabatan,
-#     "images_count": jumlah_gambar,
-#     "timestamp": timestamp
-# }
-
-# # Simpan ke Firebase di path: /employees/KRY-01
-# ref = db.reference(f'employees/{employee_id}')
-# ref.set(data)
-
-# print(f"Data karyawan {employee_id} berhasil ditambahkan ke Firebase.")
-# Memanmbahkan Dataset 
-# Tambah route dataset
-# Tambah route dataset
 @app.route('/dataset', methods=['GET', 'POST'])
 def dataset():
     if request.method == 'GET':
@@ -1847,61 +1812,7 @@ def gaji_saya():
         gaji_list=riwayat_gaji,
         total_kasbon=total_kasbon
     )
-# @app.route('/check_absen_status', methods=['GET'])
-# def check_absen_status():
-#     # Mendapatkan parameter dari URL
-#     user_id = request.args.get('user_id')
-#     jadwal_kerja = request.args.get('jadwal_kerja')  # Harus berupa kode asli
-#     minggu_ke = request.args.get('minggu_ke')
 
-#     # Validasi parameter
-#     if not user_id or not jadwal_kerja or not minggu_ke:
-#         print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id', 'jadwal_kerja', dan 'minggu_ke' disertakan.")
-#         return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
-
-#     print(f"[DEBUG] Checking attendance for user_id={user_id}, mata_kuliah={jadwal_kerja}, minggu_ke={minggu_ke}")
-
-#     try:
-#         # Referensi ke lokasi data absensi di Firebase Realtime Database
-#         attendance_ref = db.reference(f"attendance/{jadwal_kerja}/{minggu_ke}/{user_id}")
-#         data = attendance_ref.get()
-
-#         if data:
-#             print("[DEBUG] Attendance Data Found:", data)
-#             return jsonify({"status": "success", "data": data})
-#         else:
-#             print("[DEBUG] Attendance Data Not Found")
-#             return jsonify({"status": "pending", "message": "Data absensi tidak ditemukan"}), 404
-#     except Exception as e:
-#         # Menangkap kesalahan selama proses membaca data dari Firebase
-#         print(f"[ERROR] Terjadi kesalahan saat memeriksa status absensi: {e}")
-#         return jsonify({"status": "error", "message": "Terjadi kesalahan server"}), 500
-
-# @app.route('/check_absen_status_karyawan', methods=['GET'])
-# def check_absen_status_karyawan():
-#     user_id = request.args.get('user_id')
-#     jadwal_id = request.args.get('jadwal_id')
-
-#     if not user_id or not jadwal_id:
-#         print("[ERROR] Parameter tidak lengkap. Pastikan 'user_id' dan 'jadwal_id' disertakan.")
-#         return jsonify({"status": "error", "message": "Parameter tidak lengkap"}), 400
-
-#     print(f"[DEBUG] Checking attendance for user_id={user_id}, jadwal_id={jadwal_id}")
-
-#     try:
-#         # Referensi ke database karyawan
-#         attendance_ref = db.reference(f"attendance_karyawan/{jadwal_id}/{user_id}")
-#         data = attendance_ref.get()
-
-#         if data:
-#             print("[DEBUG] Attendance Data Found:", data)
-#             return jsonify({"status": "success", "data": data})
-#         else:
-#             print("[DEBUG] Attendance Data Not Found")
-#             return jsonify({"status": "pending", "message": "Data absensi tidak ditemukan"}), 404
-#     except Exception as e:
-#         print(f"[ERROR] Terjadi kesalahan saat memeriksa status absensi: {e}")
-#         return jsonify({"status": "error", "message": "Terjadi kesalahan server"}), 500
 
 # Fungsi untuk menyimpan progres
 def save_progress(progress):
@@ -1929,8 +1840,9 @@ def train():
             import json
 
             # Konfigurasi dataset
-            dataset_path = "C:/tugas/AttendEaseMahasiswa/DataSet"
-            test_dataset_path = "C:/tugas/AttendEaseMahasiswa/DataTest"
+            dataset_path = "C:/Users/Anggi/OneDrive/Dokumen/GitHub/AttendEaseMahasiswa/DataSet"
+
+            test_dataset_path = "C:/Users/Anggi/OneDrive/Dokumen/GitHub/AttendEaseMahasiswa/DataTest"
             img_size = (224, 224)
             batch_size = 32
 
