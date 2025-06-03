@@ -120,9 +120,10 @@
         }
 
         .table-responsive {
-            border-radius: 10px;
-            overflow: hidden;
-        }
+        border-radius: 10px;
+        overflow-x: auto;
+    }
+
 
 
         .status-hadir {
@@ -250,6 +251,7 @@
 
                         <!-- Table Rekap Absensi -->
                         {% if absensi_list %}
+                        <div class="table-responsive">
                         <table class="table table-bordered table-hover" width="100%">
                             <thead>
                                 <tr>
@@ -262,6 +264,7 @@
                                     <th>Bukti</th>
                                 </tr>
                             </thead>
+
                             <tbody>
                                 {% for absensi in absensi_list %}
                                 <tr>
@@ -286,8 +289,9 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                        </div>
 
-                            </div>
+                          
                                                                             <!-- Pagination -->
                             <!-- Pagination -->
                             <nav aria-label="Page navigation example">

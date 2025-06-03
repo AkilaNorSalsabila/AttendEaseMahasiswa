@@ -12,19 +12,26 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
     <style>
-        #video-container {
-            display: none;
-            margin-top: 20px;
-        }
-        iframe {
-            width: 100%;
-            max-width: 960px;
-            height: 540px;
-            border: 1px solid #ccc;
-        }
-        .alert {
-            display: none;
-        }
+  #video-container {
+    display: flex;
+    justify-content: center;   /* Vertikal kalau column */
+    align-items: center;       /* Horizontal */
+    flex-direction: column;
+    min-height: 70vh;
+    margin-top: 20px;
+}
+
+iframe {
+    width: 100%;
+    max-width: 800px; /* Ukuran bisa kamu ubah di sini */
+    height: 480px;
+    border: 1px solid #ccc;
+}
+
+.alert {
+    display: none;
+}
+
     </style>
 </head>
 
@@ -41,25 +48,11 @@
             </a>
 
             <hr class="sidebar-divider">
-
-            <li class="nav-item">
-                <a class="nav-link" href="/karyawan_dashboard">
-                    <i class="fas fa-home"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/rekap_absensi_karyawan">
-                    <i class="fas fa-list"></i>
-                    <span>Rekap Absensi</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link logout" href="/logout">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </a>
-            </li>
+            <li class="nav-item active"><a class="nav-link" href="/karyawan_dashboard"><i class="fas fa-home"></i> Dashboard Absensi</a></li>
+            <li class="nav-item"><a class="nav-link" href="/rekap_absensi"><i class="fas fa-calendar-alt"></i> Rekap Absensi</a></li>
+            <li class="nav-item "><a class="nav-link" href="/gaji_saya"><i class="fas fa-money-bill-wave"></i> Gaji Saya</a></li>
+            <li class="nav-item"><a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+            
         </ul>
 
         <!-- Content -->
